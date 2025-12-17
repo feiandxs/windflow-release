@@ -1,0 +1,10 @@
+name: Deprecated Public macOS arm64
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  noop:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Deprecated; use public-desktop-dev.yml"
