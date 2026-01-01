@@ -226,7 +226,7 @@ jobs:
   # ============================================
   macos-x64:
     needs: prepare
-    runs-on: macos-13
+    runs-on: macos-14
     env:
       SHORT_SHA: ${{ needs.prepare.outputs.short_sha }}
       OVERRIDE_VERSION: ${{ needs.prepare.outputs.semver }}
