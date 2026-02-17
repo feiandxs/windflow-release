@@ -64,7 +64,7 @@ jobs:
       - name: Checkout private repo
         uses: actions/checkout@v4
         with:
-          repository: feiandxs/windword
+          repository: feiandxs/windflow
           ref: ${{ inputs.checkout_ref }}
           token: ${{ secrets.PRIVATE_REPO_PAT }}
           fetch-depth: 0
@@ -120,11 +120,14 @@ jobs:
         shell: bash
         run: pnpm install --frozen-lockfile --config.store-dir=${PNPM_STORE_PATH}
 
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Build desktop (linux x64)
         shell: bash
         run: |
-          pnpm --filter @windword/desktop build
-          pnpm --filter @windword/desktop exec electron-builder --linux AppImage --x64
+          pnpm --filter windflow-desktop build:with-core
+          pnpm --filter windflow-desktop exec electron-builder --linux AppImage --x64
 
       - name: Package artifacts
         shell: bash
@@ -148,7 +151,7 @@ jobs:
             fi
             cp "$appimage" "release/${base_name}"
           else
-            cp "$appimage" "release/windword-develop-${SHORT_SHA}-${ARTIFACT_NAME}.AppImage"
+            cp "$appimage" "release/windflow-develop-${SHORT_SHA}-${ARTIFACT_NAME}.AppImage"
           fi
           if [ "${INCLUDE_METADATA}" = "true" ]; then
             METADATA_FILE=$(find "$APP_DIST" -maxdepth 1 -type f -name 'latest-linux*.yml' -print -quit || true)

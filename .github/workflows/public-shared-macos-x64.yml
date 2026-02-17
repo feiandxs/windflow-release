@@ -85,7 +85,7 @@ jobs:
       - name: Checkout private repo
         uses: actions/checkout@v4
         with:
-          repository: feiandxs/windword
+          repository: feiandxs/windflow
           ref: ${{ inputs.checkout_ref }}
           token: ${{ secrets.PRIVATE_REPO_PAT }}
           fetch-depth: 0
@@ -104,8 +104,8 @@ jobs:
             echo 'CSC_KEY_PASSWORD secret is required for code signing' >&2
             exit 1
           fi
-          CERT_PATH="$RUNNER_TEMP/windword-developer-id.p12"
-          KEYCHAIN_NAME="windword-signing.keychain-db"
+          CERT_PATH="$RUNNER_TEMP/windflow-developer-id.p12"
+          KEYCHAIN_NAME="windflow-signing.keychain-db"
           KEYCHAIN_PASSWORD="$(uuidgen)"
           echo "::add-mask::${KEYCHAIN_PASSWORD}"
           echo "${CSC_LINK_BASE64}" | base64 --decode > "${CERT_PATH}"
@@ -176,32 +176,14 @@ jobs:
         shell: bash
         run: pnpm install --frozen-lockfile --config.store-dir=${PNPM_STORE_PATH}
 
-      - name: Build Apple Speech CLI (x64)
-        shell: bash
-        run: pnpm build:apple-speech-cli:x64
-
-      - name: Build Apple Audio Mute CLI
-        shell: bash
-        run: pnpm build:apple-audio-mute-cli
-
-      - name: Build Apple Audio Device CLI
-        shell: bash
-        run: pnpm build:apple-audio-device-cli
-
-      - name: Build Apple Selection Detector CLI
-        shell: bash
-        run: pnpm build:apple-selection-detector-cli
-
-      - name: Prepare SenseVoice model
-        if: env.INCLUDE_SENSEVOICE_MODEL == 'true'
-        shell: bash
-        run: pnpm --filter @windword/desktop prepare:sensevoice-model
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Build desktop (mac x64)
         shell: bash
         run: |
-          pnpm --filter @windword/desktop build
-          pnpm --filter @windword/desktop exec electron-builder --mac zip --x64
+          pnpm --filter windflow-desktop build:with-core
+          pnpm --filter windflow-desktop exec electron-builder --mac zip --x64
 
       - name: Package artifacts
         shell: bash

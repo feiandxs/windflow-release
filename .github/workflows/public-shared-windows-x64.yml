@@ -93,7 +93,7 @@ jobs:
       - name: Checkout private repo
         uses: actions/checkout@v4
         with:
-          repository: feiandxs/windword
+          repository: feiandxs/windflow
           ref: ${{ inputs.checkout_ref }}
           token: ${{ secrets.PRIVATE_REPO_PAT }}
           fetch-depth: 0
@@ -151,20 +151,15 @@ jobs:
           pnpm --version
           pnpm install --frozen-lockfile --config.store-dir=${PNPM_STORE_PATH} --config.virtual-store-dir=${PNPM_VIRTUAL_STORE_DIR}
 
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Build project
         shell: bash
         working-directory: ${{ env.WW_WORKSPACE }}
         run: |
           set -euxo pipefail
-          pnpm --filter @windword/desktop build
-
-      - name: Prepare bundled SenseVoice model
-        if: env.INCLUDE_SENSEVOICE_MODEL == 'true'
-        shell: bash
-        working-directory: ${{ env.WW_WORKSPACE }}
-        run: |
-          set -euxo pipefail
-          pnpm --filter @windword/desktop prepare:sensevoice-model
+          pnpm --filter windflow-desktop build:with-core
 
       - name: Package artifacts
         env:
@@ -173,7 +168,7 @@ jobs:
         working-directory: ${{ env.WW_WORKSPACE }}
         run: |
           set -euxo pipefail
-          pnpm --filter @windword/desktop exec electron-builder ${ELECTRON_BUILDER_ARGS}
+          pnpm --filter windflow-desktop exec electron-builder ${ELECTRON_BUILDER_ARGS}
           mkdir -p release
           APP_DIST="${APP_DIR}/dist"
           EFFECTIVE_SHORT_SHA=${SHORT_SHA:-${GITHUB_SHA::7}}
@@ -191,7 +186,7 @@ jobs:
             fi
             cp "$installer" "release/${base_name}"
           else
-            cp "$installer" "release/windword-develop-${EFFECTIVE_SHORT_SHA}-${ARTIFACT_SUFFIX}.exe"
+            cp "$installer" "release/windflow-develop-${EFFECTIVE_SHORT_SHA}-${ARTIFACT_SUFFIX}.exe"
           fi
           if [ "${INCLUDE_METADATA}" = "true" ]; then
             METADATA_FILE=$(find "$APP_DIST" -maxdepth 1 -type f -name 'latest.yml' -print -quit || true)
