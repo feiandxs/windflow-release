@@ -30,6 +30,14 @@ jobs:
           set -euxo pipefail
           TAG="${{ github.event.client_payload.tag }}"
           SHA="${{ github.event.client_payload.sha }}"
+          if [ -z "${TAG}" ]; then
+            echo "client_payload.tag is required" >&2
+            exit 1
+          fi
+          if [ -z "${SHA}" ]; then
+            echo "client_payload.sha is required" >&2
+            exit 1
+          fi
           SHORT_SHA="${SHA:0:7}"
           SEMVER="${TAG#v}"
 
@@ -63,7 +71,7 @@ jobs:
         with:
           repository: feiandxs/windflow
           token: ${{ secrets.PRIVATE_REPO_PAT }}
-          ref: ${{ env.TAG_NAME }}
+          ref: ${{ github.event.client_payload.sha }}
 
       - name: Configure code signing keychain
         shell: bash
@@ -142,7 +150,15 @@ jobs:
 
       - name: Build project
         shell: bash
-        run: pnpm --filter windflow-desktop build:with-core
+        run: |
+          set -euxo pipefail
+          if node -e "const p=require('./apps/windflow-desktop/package.json');process.exit(p.scripts&&p.scripts['build:with-core']?0:1)"; then
+            echo 'Using build:with-core'
+            pnpm --filter windflow-desktop build:with-core
+          else
+            echo 'build:with-core not found, fallback to build'
+            pnpm --filter windflow-desktop build
+          fi
 
       - name: Verify notarization environment
         shell: bash
@@ -246,7 +262,7 @@ jobs:
         with:
           repository: feiandxs/windflow
           token: ${{ secrets.PRIVATE_REPO_PAT }}
-          ref: ${{ env.TAG_NAME }}
+          ref: ${{ github.event.client_payload.sha }}
 
       - name: Configure code signing keychain
         shell: bash
@@ -325,7 +341,15 @@ jobs:
 
       - name: Build project
         shell: bash
-        run: pnpm --filter windflow-desktop build:with-core
+        run: |
+          set -euxo pipefail
+          if node -e "const p=require('./apps/windflow-desktop/package.json');process.exit(p.scripts&&p.scripts['build:with-core']?0:1)"; then
+            echo 'Using build:with-core'
+            pnpm --filter windflow-desktop build:with-core
+          else
+            echo 'build:with-core not found, fallback to build'
+            pnpm --filter windflow-desktop build
+          fi
 
       - name: Verify notarization environment
         shell: bash
@@ -423,7 +447,7 @@ jobs:
         with:
           repository: feiandxs/windflow
           token: ${{ secrets.PRIVATE_REPO_PAT }}
-          ref: ${{ env.TAG_NAME }}
+          ref: ${{ github.event.client_payload.sha }}
 
       - name: Install NSIS
         shell: pwsh
@@ -471,7 +495,15 @@ jobs:
 
       - name: Build project
         shell: bash
-        run: pnpm --filter windflow-desktop build:with-core
+        run: |
+          set -euxo pipefail
+          if node -e "const p=require('./apps/windflow-desktop/package.json');process.exit(p.scripts&&p.scripts['build:with-core']?0:1)"; then
+            echo 'Using build:with-core'
+            pnpm --filter windflow-desktop build:with-core
+          else
+            echo 'build:with-core not found, fallback to build'
+            pnpm --filter windflow-desktop build
+          fi
 
       - name: Package artifacts
         shell: bash
@@ -514,7 +546,7 @@ jobs:
         with:
           repository: feiandxs/windflow
           token: ${{ secrets.PRIVATE_REPO_PAT }}
-          ref: ${{ env.TAG_NAME }}
+          ref: ${{ github.event.client_payload.sha }}
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v3
@@ -554,7 +586,15 @@ jobs:
 
       - name: Build project
         shell: bash
-        run: pnpm --filter windflow-desktop build:with-core
+        run: |
+          set -euxo pipefail
+          if node -e "const p=require('./apps/windflow-desktop/package.json');process.exit(p.scripts&&p.scripts['build:with-core']?0:1)"; then
+            echo 'Using build:with-core'
+            pnpm --filter windflow-desktop build:with-core
+          else
+            echo 'build:with-core not found, fallback to build'
+            pnpm --filter windflow-desktop build
+          fi
 
       - name: Package artifacts
         shell: bash
