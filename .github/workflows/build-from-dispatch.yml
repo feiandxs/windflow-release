@@ -137,9 +137,12 @@ jobs:
           pnpm --version
           pnpm install --frozen-lockfile --config.store-dir=${{ env.PNPM_STORE_PATH }}
 
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Build project
         shell: bash
-        run: pnpm --filter windflow-desktop build
+        run: pnpm --filter windflow-desktop build:with-core
 
       - name: Verify notarization environment
         shell: bash
@@ -317,9 +320,12 @@ jobs:
           pnpm --version
           pnpm install --frozen-lockfile --config.store-dir=${{ env.PNPM_STORE_PATH }}
 
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Build project
         shell: bash
-        run: pnpm --filter windflow-desktop build
+        run: pnpm --filter windflow-desktop build:with-core
 
       - name: Verify notarization environment
         shell: bash
@@ -460,9 +466,12 @@ jobs:
           pnpm --version
           pnpm install --frozen-lockfile
 
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Build project
         shell: bash
-        run: pnpm --filter windflow-desktop build
+        run: pnpm --filter windflow-desktop build:with-core
 
       - name: Package artifacts
         shell: bash
@@ -540,9 +549,12 @@ jobs:
           pnpm --version
           pnpm install --frozen-lockfile
 
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Build project
         shell: bash
-        run: pnpm --filter windflow-desktop build
+        run: pnpm --filter windflow-desktop build:with-core
 
       - name: Package artifacts
         shell: bash
