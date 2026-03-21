@@ -29,7 +29,7 @@ jobs:
       version: ${{ steps.meta.outputs.version }}
     steps:
       - name: Checkout private repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: feiandxs/windflow
           token: ${{ secrets.PRIVATE_REPO_PAT }}
@@ -75,7 +75,7 @@ jobs:
       WINDFLOW_RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
     steps:
       - name: Checkout private repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: feiandxs/windflow
           token: ${{ secrets.PRIVATE_REPO_PAT }}
@@ -103,13 +103,13 @@ jobs:
           echo "KEYCHAIN_PASSWORD=${KEYCHAIN_PASSWORD}" >> "${GITHUB_ENV}"
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v3
+        uses: pnpm/action-setup@v5
         with:
           version: ${{ env.PNPM_VERSION }}
           run_install: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -138,7 +138,7 @@ jobs:
           find "$APP_DIST" -maxdepth 1 -type f \( -name '*.zip' -o -name '*.dmg' \) ! -name '*.blockmap' -exec cp {} release/ \;
 
       - name: Upload macOS arm64 artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dev-release-macos-arm64-${{ needs.prepare.outputs.short_sha }}
           path: release
@@ -166,7 +166,7 @@ jobs:
       WINDFLOW_RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
     steps:
       - name: Checkout private repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: feiandxs/windflow
           token: ${{ secrets.PRIVATE_REPO_PAT }}
@@ -194,13 +194,13 @@ jobs:
           echo "KEYCHAIN_PASSWORD=${KEYCHAIN_PASSWORD}" >> "${GITHUB_ENV}"
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v3
+        uses: pnpm/action-setup@v5
         with:
           version: ${{ env.PNPM_VERSION }}
           run_install: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -229,7 +229,7 @@ jobs:
           find "$APP_DIST" -maxdepth 1 -type f \( -name '*.zip' -o -name '*.dmg' \) ! -name '*.blockmap' -exec cp {} release/ \;
 
       - name: Upload macOS x64 artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dev-release-macos-x64-${{ needs.prepare.outputs.short_sha }}
           path: release
@@ -257,7 +257,7 @@ jobs:
       WINDFLOW_RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
     steps:
       - name: Checkout private repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: feiandxs/windflow
           token: ${{ secrets.PRIVATE_REPO_PAT }}
@@ -285,13 +285,13 @@ jobs:
           echo "KEYCHAIN_PASSWORD=${KEYCHAIN_PASSWORD}" >> "${GITHUB_ENV}"
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v3
+        uses: pnpm/action-setup@v5
         with:
           version: ${{ env.PNPM_VERSION }}
           run_install: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -320,7 +320,7 @@ jobs:
           find "$APP_DIST" -maxdepth 1 -type f \( -name '*.zip' -o -name '*.dmg' \) ! -name '*.blockmap' -exec cp {} release/ \;
 
       - name: Upload macOS universal artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dev-release-macos-universal-${{ needs.prepare.outputs.short_sha }}
           path: release
@@ -342,7 +342,7 @@ jobs:
       WINDFLOW_RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
     steps:
       - name: Checkout private repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: feiandxs/windflow
           token: ${{ secrets.PRIVATE_REPO_PAT }}
@@ -353,13 +353,13 @@ jobs:
         run: choco install nsis -y
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v3
+        uses: pnpm/action-setup@v5
         with:
           version: ${{ env.PNPM_VERSION }}
           run_install: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -386,7 +386,7 @@ jobs:
           find "$APP_DIST" -maxdepth 1 -type f \( -name '*.exe' -o -name '*.msi' \) -exec cp {} release/ \;
 
       - name: Upload Windows x64 artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dev-release-windows-x64-${{ needs.prepare.outputs.short_sha }}
           path: release
@@ -400,20 +400,20 @@ jobs:
       WINDFLOW_RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
     steps:
       - name: Checkout private repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: feiandxs/windflow
           token: ${{ secrets.PRIVATE_REPO_PAT }}
           ref: ${{ needs.prepare.outputs.resolved_sha }}
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v3
+        uses: pnpm/action-setup@v5
         with:
           version: ${{ env.PNPM_VERSION }}
           run_install: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -436,7 +436,7 @@ jobs:
           find "$APP_DIST" -maxdepth 1 -type f -name '*.AppImage' -exec cp {} release/ \;
 
       - name: Upload Linux x64 artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dev-release-linux-x64-${{ needs.prepare.outputs.short_sha }}
           path: release

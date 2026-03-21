@@ -67,7 +67,7 @@ jobs:
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - name: Checkout private repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: feiandxs/windflow
           token: ${{ secrets.PRIVATE_REPO_PAT }}
@@ -109,13 +109,13 @@ jobs:
           security find-identity -v -p codesigning "${KEYCHAIN_NAME}" || true
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v3
+        uses: pnpm/action-setup@v5
         with:
           version: ${{ env.PNPM_VERSION }}
           run_install: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -227,7 +227,7 @@ jobs:
           spctl --assess --type exec -vv "$APP_PATH"
 
       - name: Upload macOS arm64 artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-arm64
           path: release
@@ -258,7 +258,7 @@ jobs:
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - name: Checkout private repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: feiandxs/windflow
           token: ${{ secrets.PRIVATE_REPO_PAT }}
@@ -300,13 +300,13 @@ jobs:
           security find-identity -v -p codesigning "${KEYCHAIN_NAME}" || true
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v3
+        uses: pnpm/action-setup@v5
         with:
           version: ${{ env.PNPM_VERSION }}
           run_install: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -418,7 +418,7 @@ jobs:
           spctl --assess --type exec -vv "$APP_PATH"
 
       - name: Upload macOS x64 artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-x64
           path: release
@@ -449,7 +449,7 @@ jobs:
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - name: Checkout private repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: feiandxs/windflow
           token: ${{ secrets.PRIVATE_REPO_PAT }}
@@ -491,13 +491,13 @@ jobs:
           security find-identity -v -p codesigning "${KEYCHAIN_NAME}" || true
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v3
+        uses: pnpm/action-setup@v5
         with:
           version: ${{ env.PNPM_VERSION }}
           run_install: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -607,7 +607,7 @@ jobs:
           spctl --assess --type exec -vv "$APP_PATH"
 
       - name: Upload macOS universal artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-universal
           path: release
@@ -632,7 +632,7 @@ jobs:
       TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
     steps:
       - name: Checkout private repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: feiandxs/windflow
           token: ${{ secrets.PRIVATE_REPO_PAT }}
@@ -643,13 +643,13 @@ jobs:
         run: choco install nsis -y
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v3
+        uses: pnpm/action-setup@v5
         with:
           version: ${{ env.PNPM_VERSION }}
           run_install: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -716,7 +716,7 @@ jobs:
           find "$APP_DIST" -maxdepth 1 -type f -name '*.blockmap' -exec cp {} release/ \;
 
       - name: Upload Windows x64 artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-x64
           path: release
@@ -733,20 +733,20 @@ jobs:
       TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
     steps:
       - name: Checkout private repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: feiandxs/windflow
           token: ${{ secrets.PRIVATE_REPO_PAT }}
           ref: ${{ github.event.client_payload.sha }}
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v3
+        uses: pnpm/action-setup@v5
         with:
           version: ${{ env.PNPM_VERSION }}
           run_install: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -806,7 +806,7 @@ jobs:
           fi
 
       - name: Upload Linux x64 artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: linux-x64
           path: release
@@ -827,7 +827,7 @@ jobs:
       TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
 
