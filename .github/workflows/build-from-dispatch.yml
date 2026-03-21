@@ -109,6 +109,7 @@ jobs:
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v5
+        with:
           run_install: false
 
       - name: Set up Node.js
@@ -298,6 +299,7 @@ jobs:
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v5
+        with:
           run_install: false
 
       - name: Set up Node.js
@@ -487,6 +489,7 @@ jobs:
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v5
+        with:
           run_install: false
 
       - name: Set up Node.js
@@ -637,6 +640,7 @@ jobs:
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v5
+        with:
           run_install: false
 
       - name: Set up Node.js
@@ -732,6 +736,7 @@ jobs:
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v5
+        with:
           run_install: false
 
       - name: Set up Node.js
