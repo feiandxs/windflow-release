@@ -9,7 +9,6 @@ permissions:
 
 env:
   NODE_VERSION: '20'
-  PNPM_VERSION: '9'
   PNPM_STORE_PATH: ~/.pnpm-store
   APP_DIR: apps/windflow-desktop
 
@@ -110,8 +109,6 @@ jobs:
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v5
-        with:
-          version: ${{ env.PNPM_VERSION }}
           run_install: false
 
       - name: Set up Node.js
@@ -301,8 +298,6 @@ jobs:
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v5
-        with:
-          version: ${{ env.PNPM_VERSION }}
           run_install: false
 
       - name: Set up Node.js
@@ -492,8 +487,6 @@ jobs:
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v5
-        with:
-          version: ${{ env.PNPM_VERSION }}
           run_install: false
 
       - name: Set up Node.js
@@ -644,8 +637,6 @@ jobs:
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v5
-        with:
-          version: ${{ env.PNPM_VERSION }}
           run_install: false
 
       - name: Set up Node.js
@@ -741,8 +732,6 @@ jobs:
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v5
-        with:
-          version: ${{ env.PNPM_VERSION }}
           run_install: false
 
       - name: Set up Node.js
