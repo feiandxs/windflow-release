@@ -932,9 +932,7 @@ jobs:
           elif [ -f "${EN_NOTES}" ]; then
             cp "${EN_NOTES}" release-notes.md
           else
-            cat > release-notes.md << EOF
-            ## WindFlow ${TAG_NAME}
-            EOF
+            printf '## WindFlow %s\n' "${TAG_NAME}" > release-notes.md
           fi
 
           cat >> release-notes.md << EOF
