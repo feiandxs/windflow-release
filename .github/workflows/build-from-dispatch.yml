@@ -819,7 +819,16 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
+      SEMVER: ${{ needs.prepare.outputs.semver }}
     steps:
+      - name: Checkout private repository for release notes
+        uses: actions/checkout@v6
+        with:
+          repository: feiandxs/windflow
+          token: ${{ secrets.PRIVATE_REPO_PAT }}
+          ref: ${{ needs.prepare.outputs.tag_name }}
+          path: source
+
       - name: Download all artifacts
         uses: actions/download-artifact@v8
         with:
@@ -914,8 +923,23 @@ jobs:
         run: |
           set -euxo pipefail
           RELEASE_TIME="$(date -u '+%Y-%m-%d %H:%M:%SZ')"
-          cat > release-notes.md << EOF
-          ## WindFlow ${TAG_NAME}
+          NOTES_DIR="source/apps/windflow-desktop/release-notes/${SEMVER}"
+          ZH_NOTES="${NOTES_DIR}/zh-CN.md"
+          EN_NOTES="${NOTES_DIR}/en.md"
+
+          if [ -f "${ZH_NOTES}" ]; then
+            cp "${ZH_NOTES}" release-notes.md
+          elif [ -f "${EN_NOTES}" ]; then
+            cp "${EN_NOTES}" release-notes.md
+          else
+            cat > release-notes.md << EOF
+            ## WindFlow ${TAG_NAME}
+            EOF
+          fi
+
+          cat >> release-notes.md << EOF
+
+          ---
 
           Released at: ${RELEASE_TIME}
 
