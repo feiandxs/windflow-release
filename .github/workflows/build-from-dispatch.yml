@@ -977,6 +977,12 @@ jobs:
             --title "WindFlow ${TAG_NAME}" \
             --notes-file release-notes.md
 
+      - name: Trigger landing page revalidation
+        if: success()
+        shell: bash
+        run: |
+          curl -sf "https://www.windflow.app/api/revalidate?secret=${{ secrets.REVALIDATE_SECRET }}" || echo "::warning::Landing page revalidation failed (non-blocking)"
+
   # ============================================
   # Cleanup: 清理 artifacts
   # ============================================
