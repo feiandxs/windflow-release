@@ -146,6 +146,15 @@ jobs:
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Build Rust CLI binary
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cargo build --release -p windflow-cli --manifest-path crates/Cargo.toml
+          mkdir -p apps/windflow-desktop/resources/bin
+          cp crates/target/release/windflow apps/windflow-desktop/resources/bin/
+          ls -lh apps/windflow-desktop/resources/bin/
+
       - name: Build project
         shell: bash
         run: |
@@ -336,6 +345,15 @@ jobs:
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Build Rust CLI binary
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cargo build --release -p windflow-cli --manifest-path crates/Cargo.toml
+          mkdir -p apps/windflow-desktop/resources/bin
+          cp crates/target/release/windflow apps/windflow-desktop/resources/bin/
+          ls -lh apps/windflow-desktop/resources/bin/
+
       - name: Build project
         shell: bash
         run: |
@@ -489,6 +507,15 @@ jobs:
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Build Rust CLI binary
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cargo build --release -p windflow-cli --manifest-path crates/Cargo.toml
+          mkdir -p apps/windflow-desktop/resources/bin
+          cp crates/target/release/windflow.exe apps/windflow-desktop/resources/bin/
+          ls -lh apps/windflow-desktop/resources/bin/
+
       - name: Build project
         shell: bash
         run: |
@@ -580,6 +607,15 @@ jobs:
 
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Rust CLI binary
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cargo build --release -p windflow-cli --manifest-path crates/Cargo.toml
+          mkdir -p apps/windflow-desktop/resources/bin
+          cp crates/target/release/windflow apps/windflow-desktop/resources/bin/
+          ls -lh apps/windflow-desktop/resources/bin/
 
       - name: Build project
         shell: bash
