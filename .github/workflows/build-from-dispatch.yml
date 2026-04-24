@@ -834,6 +834,16 @@ jobs:
         with:
           path: artifacts
 
+      - name: Generate release metadata
+        shell: bash
+        run: |
+          set -euxo pipefail
+          GENERATED_DIR="generated"
+          node source/apps/windflow-desktop/scripts/generate-release-metadata.mjs \
+            --version "${SEMVER}" \
+            --output-dir "${GENERATED_DIR}"
+          cp "${GENERATED_DIR}/changelog.yml" "artifacts/changelog.yml"
+
       - name: Merge macOS yml files
         shell: bash
         run: |
@@ -918,22 +928,12 @@ jobs:
           cat "$assets_file"
           echo "assets_file=$assets_file" >> "$GITHUB_OUTPUT"
 
-      - name: Generate release notes
+      - name: Finalize release notes
         shell: bash
         run: |
           set -euxo pipefail
           RELEASE_TIME="$(date -u '+%Y-%m-%d %H:%M:%SZ')"
-          NOTES_DIR="source/apps/windflow-desktop/release-notes/${SEMVER}"
-          ZH_NOTES="${NOTES_DIR}/zh-CN.md"
-          EN_NOTES="${NOTES_DIR}/en.md"
-
-          if [ -f "${ZH_NOTES}" ]; then
-            cp "${ZH_NOTES}" release-notes.md
-          elif [ -f "${EN_NOTES}" ]; then
-            cp "${EN_NOTES}" release-notes.md
-          else
-            printf '## WindFlow %s\n' "${TAG_NAME}" > release-notes.md
-          fi
+          cp generated/release-notes.md release-notes.md
 
           cat >> release-notes.md << EOF
 
