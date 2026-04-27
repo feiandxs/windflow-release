@@ -785,6 +785,17 @@ jobs:
             mv "$LINUX_YML" "artifacts/latest-linux.yml"
           fi
 
+      - name: Generate release metadata
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p release-metadata
+          node source/apps/windflow-desktop/scripts/generate-release-metadata.mjs \
+            --version "${SEMVER}" \
+            --output-dir release-metadata
+          cp release-metadata/changelog.yml artifacts/changelog.yml
+          cp release-metadata/release-notes.md release-notes.md
+
       - name: Prepare release assets
         id: assets
         shell: bash
@@ -815,22 +826,12 @@ jobs:
           cat "$assets_file"
           echo "assets_file=$assets_file" >> "$GITHUB_OUTPUT"
 
-      - name: Generate release notes
+      - name: Append release notes footer
         shell: bash
         run: |
           set -euxo pipefail
           RELEASE_TIME="$(date -u '+%Y-%m-%d %H:%M:%SZ')"
-          NOTES_DIR="source/apps/windflow-desktop/release-notes/${SEMVER}"
-          ZH_NOTES="${NOTES_DIR}/zh-CN.md"
-          EN_NOTES="${NOTES_DIR}/en.md"
-
-          if [ -f "${ZH_NOTES}" ]; then
-            cp "${ZH_NOTES}" release-notes.md
-          elif [ -f "${EN_NOTES}" ]; then
-            cp "${EN_NOTES}" release-notes.md
-          else
-            printf '## WindFlow %s\n' "${TAG_NAME}" > release-notes.md
-          fi
+          test -s release-notes.md
 
           cat >> release-notes.md << EOF
 
