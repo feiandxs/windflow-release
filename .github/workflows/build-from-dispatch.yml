@@ -11,6 +11,7 @@ env:
   NODE_VERSION: '20'
   PNPM_STORE_PATH: ~/.pnpm-store
   APP_DIR: apps/windflow-desktop
+  BUN_VERSION: '1.3.13'
 
 jobs:
   # ============================================
@@ -144,7 +145,7 @@ jobs:
           pnpm install --frozen-lockfile --config.store-dir=${{ env.PNPM_STORE_PATH }}
 
       - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.84.0
 
       - name: Build Rust CLI binary
         shell: bash
@@ -161,7 +162,7 @@ jobs:
           set -euxo pipefail
           mkdir -p apps/windflow-desktop/resources/bin
           curl -fSL -o /tmp/bun.zip \
-            "https://github.com/oven-sh/bun/releases/latest/download/bun-darwin-aarch64.zip"
+            "https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-darwin-aarch64.zip"
           unzip -o /tmp/bun.zip -d /tmp/bun-extract
           cp /tmp/bun-extract/bun-darwin-aarch64/bun apps/windflow-desktop/resources/bin/bun
           chmod +x apps/windflow-desktop/resources/bin/bun
@@ -356,7 +357,7 @@ jobs:
           pnpm install --frozen-lockfile --config.store-dir=${{ env.PNPM_STORE_PATH }}
 
       - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.84.0
 
       - name: Build Rust CLI binary
         shell: bash
@@ -373,7 +374,7 @@ jobs:
           set -euxo pipefail
           mkdir -p apps/windflow-desktop/resources/bin
           curl -fSL -o /tmp/bun.zip \
-            "https://github.com/oven-sh/bun/releases/latest/download/bun-darwin-x64.zip"
+            "https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-darwin-x64.zip"
           unzip -o /tmp/bun.zip -d /tmp/bun-extract
           cp /tmp/bun-extract/bun-darwin-x64/bun apps/windflow-desktop/resources/bin/bun
           chmod +x apps/windflow-desktop/resources/bin/bun
@@ -531,7 +532,7 @@ jobs:
           pnpm install --frozen-lockfile
 
       - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.84.0
 
       - name: Build Rust CLI binary
         shell: bash
@@ -548,7 +549,7 @@ jobs:
           set -euxo pipefail
           mkdir -p apps/windflow-desktop/resources/bin
           curl -fSL -o /tmp/bun.zip \
-            "https://github.com/oven-sh/bun/releases/latest/download/bun-windows-x64.zip"
+            "https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-windows-x64.zip"
           unzip -o /tmp/bun.zip -d /tmp/bun-extract
           cp /tmp/bun-extract/bun-windows-x64/bun.exe apps/windflow-desktop/resources/bin/bun.exe
           echo "Bun downloaded: $(ls -lh apps/windflow-desktop/resources/bin/bun.exe)"
@@ -644,7 +645,7 @@ jobs:
           pnpm install --frozen-lockfile
 
       - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.84.0
 
       - name: Build Rust CLI binary
         shell: bash
@@ -661,7 +662,7 @@ jobs:
           set -euxo pipefail
           mkdir -p apps/windflow-desktop/resources/bin
           curl -fSL -o /tmp/bun.zip \
-            "https://github.com/oven-sh/bun/releases/latest/download/bun-linux-x64.zip"
+            "https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-linux-x64.zip"
           unzip -o /tmp/bun.zip -d /tmp/bun-extract
           cp /tmp/bun-extract/bun-linux-x64/bun apps/windflow-desktop/resources/bin/bun
           chmod +x apps/windflow-desktop/resources/bin/bun
