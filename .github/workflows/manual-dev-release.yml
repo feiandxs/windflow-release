@@ -122,7 +122,7 @@ jobs:
           pnpm install --frozen-lockfile --config.store-dir=${{ env.PNPM_STORE_PATH }}
 
       - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.84.0
 
       - name: Build Rust CLI binary
         shell: bash
@@ -221,7 +221,7 @@ jobs:
           pnpm install --frozen-lockfile --config.store-dir=${{ env.PNPM_STORE_PATH }}
 
       - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.84.0
 
       - name: Build Rust CLI binary
         shell: bash
@@ -297,7 +297,7 @@ jobs:
           pnpm install --frozen-lockfile
 
       - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.84.0
 
       - name: Build Rust CLI binary
         shell: bash
@@ -355,7 +355,7 @@ jobs:
           pnpm install --frozen-lockfile
 
       - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.84.0
 
       - name: Build Rust CLI binary
         shell: bash
