@@ -244,6 +244,7 @@ jobs:
             echo 'Unable to locate .app bundle within archive' >&2
             exit 1
           fi
+          pnpm verify:packaged-desktop-sidecars -- --app "$APP_PATH" --require-macos-team-id
           xcrun stapler validate "$APP_PATH"
           spctl --assess --type exec -vv "$APP_PATH"
 
@@ -456,6 +457,7 @@ jobs:
             echo 'Unable to locate .app bundle within archive' >&2
             exit 1
           fi
+          pnpm verify:packaged-desktop-sidecars -- --app "$APP_PATH" --require-macos-team-id
           xcrun stapler validate "$APP_PATH"
           spctl --assess --type exec -vv "$APP_PATH"
 

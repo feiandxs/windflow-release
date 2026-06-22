@@ -144,6 +144,17 @@ jobs:
           APP_DIST="${APP_DIR}/dist"
           find "$APP_DIST" -maxdepth 1 -type f \( -name '*.zip' -o -name '*.dmg' \) ! -name '*.blockmap' -exec cp {} release/ \;
 
+      - name: Validate packaged sidecars
+        shell: bash
+        run: |
+          set -euxo pipefail
+          APP_PATH=$(find "${APP_DIR}/dist" -maxdepth 2 -type d -name '*.app' -print -quit || true)
+          if [ -z "$APP_PATH" ]; then
+            echo 'Unable to locate .app bundle after packaging' >&2
+            exit 1
+          fi
+          pnpm verify:packaged-desktop-sidecars -- --app "$APP_PATH" --require-macos-team-id
+
       - name: Upload macOS arm64 artifacts
         uses: actions/upload-artifact@v7
         with:
@@ -242,6 +253,17 @@ jobs:
           mkdir -p release
           APP_DIST="${APP_DIR}/dist"
           find "$APP_DIST" -maxdepth 1 -type f \( -name '*.zip' -o -name '*.dmg' \) ! -name '*.blockmap' -exec cp {} release/ \;
+
+      - name: Validate packaged sidecars
+        shell: bash
+        run: |
+          set -euxo pipefail
+          APP_PATH=$(find "${APP_DIR}/dist" -maxdepth 2 -type d -name '*.app' -print -quit || true)
+          if [ -z "$APP_PATH" ]; then
+            echo 'Unable to locate .app bundle after packaging' >&2
+            exit 1
+          fi
+          pnpm verify:packaged-desktop-sidecars -- --app "$APP_PATH" --require-macos-team-id
 
       - name: Upload macOS x64 artifacts
         uses: actions/upload-artifact@v7
