@@ -513,3 +513,84 @@ jobs:
         with:
           name: dev-release-linux-x64-${{ needs.prepare.outputs.short_sha }}
           path: release
+
+  # ============================================
+  # Publish: 把各平台 dev 包发成 GitHub prerelease
+  # Release 资产走快 CDN(不同于 Actions artifacts 的 Azure blob),便于下载。
+  # ============================================
+  publish:
+    name: Publish prerelease
+    needs:
+      - prepare
+      - macos-arm64
+      - macos-x64
+      - macos-universal
+      - windows-x64
+      - linux-x64
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REF_NAME: ${{ needs.prepare.outputs.ref_name }}
+      REF_SLUG: ${{ needs.prepare.outputs.ref_slug }}
+      SHORT_SHA: ${{ needs.prepare.outputs.short_sha }}
+      RESOLVED_SHA: ${{ needs.prepare.outputs.resolved_sha }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - name: Download all dev artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: dist-artifacts
+
+      - name: Collect package files
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p upload
+          # Gather the packaged installers from every per-platform artifact dir.
+          files=()
+          while IFS= read -r f; do
+            files+=("$f")
+          done < <(find dist-artifacts -type f \
+            \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o -name '*.msi' -o -name '*.AppImage' \) | sort)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo '::error::No package files found to publish' >&2
+            exit 1
+          fi
+          # Fail loudly on duplicate basenames so we never silently drop an
+          # architecture when flattening the per-platform dirs into one release.
+          dupes="$(printf '%s\n' "${files[@]}" | xargs -n1 basename | sort | uniq -d)"
+          if [ -n "${dupes}" ]; then
+            echo '::error::Duplicate asset basenames across platform artifacts:' >&2
+            printf '%s\n' "${dupes}" >&2
+            exit 1
+          fi
+          for f in "${files[@]}"; do cp "$f" upload/; done
+          echo 'Collected files:'
+          ls -lh upload/
+
+      - name: Publish prerelease
+        shell: bash
+        run: |
+          set -euxo pipefail
+          # run_number + run_attempt keeps the tag unique across reruns of the same run.
+          TAG="dev-${REF_SLUG}-${SHORT_SHA}.${{ github.run_number }}.${{ github.run_attempt }}"
+          # Defensive: if a prior attempt already left this tag/release, replace it.
+          if gh release view "${TAG}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release delete "${TAG}" --repo "${{ github.repository }}" --cleanup-tag -y || true
+          fi
+          {
+            echo "Automated dev/beta desktop build from windflow ${REF_NAME} @ ${RESOLVED_SHA}."
+            echo ""
+            echo "Distinct dev app identity (Windflow-Dev / com.windflow.desktop.dev) so it installs alongside the production app and requests macOS permissions as separate TCC entries."
+            echo ""
+            echo "Dev/testing build - not a production release."
+          } > notes.md
+          gh release create "${TAG}" upload/* \
+            --repo "${{ github.repository }}" \
+            --title "Dev ${VERSION} (${REF_NAME} @ ${SHORT_SHA})" \
+            --notes-file notes.md \
+            --prerelease
+          echo "Published prerelease ${TAG}:"
+          gh release view "${TAG}" --repo "${{ github.repository }}" --json url --jq '.url'
