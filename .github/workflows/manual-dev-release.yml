@@ -527,6 +527,11 @@ jobs:
       - macos-universal
       - windows-x64
       - linux-x64
+    # Ship whatever platforms built — a single broken/flaky platform (e.g. the
+    # macOS universal ASAR-merge) must not block the dev prerelease. Requires only
+    # prepare (for release metadata) and runs regardless of the build outcomes;
+    # the collect step below records exactly which platforms made it in.
+    if: ${{ !cancelled() && needs.prepare.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -586,6 +591,11 @@ jobs:
             echo "Distinct dev app identity (Windflow-Dev / com.windflow.desktop.dev) so it installs alongside the production app and requests macOS permissions as separate TCC entries."
             echo ""
             echo "Dev/testing build - not a production release."
+            echo ""
+            echo "Included builds:"
+            for f in upload/*; do
+              echo "- $(basename "$f")"
+            done
           } > notes.md
           gh release create "${TAG}" upload/* \
             --repo "${{ github.repository }}" \
