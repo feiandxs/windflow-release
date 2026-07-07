@@ -31,7 +31,7 @@ jobs:
       - name: Checkout private repository
         uses: actions/checkout@v6
         with:
-          repository: feiandxs/windflow
+          repository: windword-labs/windflow
           token: ${{ secrets.PRIVATE_REPO_PAT }}
           ref: ${{ inputs.ref }}
 
@@ -77,7 +77,7 @@ jobs:
       - name: Checkout private repository
         uses: actions/checkout@v6
         with:
-          repository: feiandxs/windflow
+          repository: windword-labs/windflow
           token: ${{ secrets.PRIVATE_REPO_PAT }}
           ref: ${{ needs.prepare.outputs.resolved_sha }}
 
@@ -187,7 +187,7 @@ jobs:
       - name: Checkout private repository
         uses: actions/checkout@v6
         with:
-          repository: feiandxs/windflow
+          repository: windword-labs/windflow
           token: ${{ secrets.PRIVATE_REPO_PAT }}
           ref: ${{ needs.prepare.outputs.resolved_sha }}
 
@@ -401,7 +401,7 @@ jobs:
       - name: Checkout private repository
         uses: actions/checkout@v6
         with:
-          repository: feiandxs/windflow
+          repository: windword-labs/windflow
           token: ${{ secrets.PRIVATE_REPO_PAT }}
           ref: ${{ needs.prepare.outputs.resolved_sha }}
 
@@ -467,7 +467,7 @@ jobs:
       - name: Checkout private repository
         uses: actions/checkout@v6
         with:
-          repository: feiandxs/windflow
+          repository: windword-labs/windflow
           token: ${{ secrets.PRIVATE_REPO_PAT }}
           ref: ${{ needs.prepare.outputs.resolved_sha }}
 
