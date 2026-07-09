@@ -3,6 +3,24 @@ name: Notify Discord Release
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag to announce
+        required: true
+        type: string
+      release_name:
+        description: Release display name
+        required: true
+        type: string
+      release_url:
+        description: GitHub Release URL
+        required: true
+        type: string
+      release_prerelease:
+        description: Whether this is a prerelease
+        required: true
+        type: boolean
 
 permissions:
   contents: read
@@ -24,22 +42,22 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Checkout source repository for production changelog
-        if: ${{ !github.event.release.prerelease && startsWith(github.event.release.tag_name, 'v') }}
+        if: ${{ (github.event_name == 'release' && !github.event.release.prerelease && startsWith(github.event.release.tag_name, 'v')) || (github.event_name == 'workflow_dispatch' && !inputs.release_prerelease && startsWith(inputs.release_tag, 'v')) }}
         uses: actions/checkout@v6
         with:
           repository: ${{ env.SOURCE_REPOSITORY }}
           token: ${{ secrets.PRIVATE_REPO_PAT }}
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ github.event.release.tag_name || inputs.release_tag }}
           path: source
 
       - name: Build Discord payloads
         env:
           CHANGELOG_PATH: source/${{ env.SOURCE_CHANGELOG_PATH }}
           PAYLOAD_DIR: ${{ runner.temp }}/discord-release-payloads
-          RELEASE_NAME: ${{ github.event.release.name }}
-          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-          RELEASE_URL: ${{ github.event.release.html_url }}
+          RELEASE_NAME: ${{ github.event.release.name || inputs.release_name }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease || inputs.release_prerelease }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+          RELEASE_URL: ${{ github.event.release.html_url || inputs.release_url }}
           CHUNK_LIMIT: ${{ env.DISCORD_CHUNK_LIMIT }}
         shell: bash
         run: |
