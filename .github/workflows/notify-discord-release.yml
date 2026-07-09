@@ -1,0 +1,281 @@
+name: Notify Discord Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+  SOURCE_REPOSITORY: windword-labs/windflow
+  SOURCE_CHANGELOG_PATH: apps/windflow-desktop/changelog.yml
+  DISCORD_CHUNK_LIMIT: '1900'
+
+jobs:
+  notify:
+    name: Notify Discord
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Checkout source repository for production changelog
+        if: ${{ !github.event.release.prerelease && startsWith(github.event.release.tag_name, 'v') }}
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ env.SOURCE_REPOSITORY }}
+          token: ${{ secrets.PRIVATE_REPO_PAT }}
+          ref: ${{ github.event.release.tag_name }}
+          path: source
+
+      - name: Build Discord payloads
+        env:
+          CHANGELOG_PATH: source/${{ env.SOURCE_CHANGELOG_PATH }}
+          PAYLOAD_DIR: ${{ runner.temp }}/discord-release-payloads
+          RELEASE_NAME: ${{ github.event.release.name }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_URL: ${{ github.event.release.html_url }}
+          CHUNK_LIMIT: ${{ env.DISCORD_CHUNK_LIMIT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs')
+          const path = require('node:path')
+
+          function normalizeVersion(value) {
+            return String(value || '').replace(/^v/i, '').trim()
+          }
+
+          function stripEnclosingQuotes(value) {
+            const trimmed = String(value || '').trim()
+            if (
+              (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+              (trimmed.startsWith("'") && trimmed.endsWith("'"))
+            ) {
+              return trimmed.slice(1, -1)
+            }
+            return trimmed
+          }
+
+          function parseChangelog(text) {
+            const entries = []
+            const lines = text.replace(/\r\n/g, '\n').split('\n')
+            let currentEntry = null
+            let currentLocale = null
+            let currentBlock = []
+
+            const flushLocale = () => {
+              if (!currentEntry || !currentLocale) return
+              const content = currentBlock.join('\n').trim()
+              if (content) {
+                currentEntry.locales[currentLocale] = content
+              }
+              currentLocale = null
+              currentBlock = []
+            }
+
+            for (const line of lines) {
+              const versionMatch = line.match(/^\s{2}- version:\s*(.+)\s*$/)
+              if (versionMatch) {
+                flushLocale()
+                currentEntry = {
+                  version: normalizeVersion(stripEnclosingQuotes(versionMatch[1])),
+                  locales: {}
+                }
+                entries.push(currentEntry)
+                continue
+              }
+
+              if (!currentEntry) continue
+
+              const localeMatch = line.match(/^\s{6}([A-Za-z0-9_-]+):\s*\|[-+]?\s*$/)
+              if (localeMatch) {
+                flushLocale()
+                currentLocale = localeMatch[1]
+                currentBlock = []
+                continue
+              }
+
+              if (currentLocale) {
+                currentBlock.push(line.startsWith('        ') ? line.slice(8) : line)
+              }
+            }
+
+            flushLocale()
+            return entries
+          }
+
+          function removeLeadingHeading(markdown) {
+            return String(markdown || '')
+              .replace(/^\s*##[^\n]*\n+/, '')
+              .trim()
+          }
+
+          function pickBilingualReleaseNotes(changelogPath, tag) {
+            if (!fs.existsSync(changelogPath)) {
+              throw new Error(`Production changelog not found: ${changelogPath}`)
+            }
+
+            const version = normalizeVersion(tag)
+            const changelog = fs.readFileSync(changelogPath, 'utf8')
+            const target = parseChangelog(changelog).find((entry) => entry.version === version)
+            if (!target) {
+              throw new Error(`changelog.yml is missing version ${version}`)
+            }
+
+            const zh = removeLeadingHeading(target.locales['zh-CN'])
+            const en = removeLeadingHeading(target.locales.en)
+            if (!zh) {
+              throw new Error(`changelog.yml version ${version} has no zh-CN release notes`)
+            }
+            if (!en) {
+              throw new Error(`changelog.yml version ${version} has no en release notes`)
+            }
+
+            return { en, zh }
+          }
+
+          function splitMessage(text, limit) {
+            const chunks = []
+            let current = ''
+
+            for (const line of String(text).split('\n')) {
+              const candidate = current ? `${current}\n${line}` : line
+              if (candidate.length <= limit) {
+                current = candidate
+                continue
+              }
+
+              if (current) {
+                chunks.push(current)
+              }
+
+              if (line.length <= limit) {
+                current = line
+                continue
+              }
+
+              for (let index = 0; index < line.length; index += limit) {
+                chunks.push(line.slice(index, index + limit))
+              }
+              current = ''
+            }
+
+            if (current) {
+              chunks.push(current)
+            }
+
+            return chunks
+          }
+
+          const env = process.env
+          const isPrerelease = env.RELEASE_PRERELEASE === 'true'
+          const tag = env.RELEASE_TAG
+          const releaseUrl = env.RELEASE_URL
+          const releaseName = env.RELEASE_NAME || tag
+          const chunkLimit = Number.parseInt(env.CHUNK_LIMIT || '1900', 10)
+          const payloadDir = env.PAYLOAD_DIR
+
+          if (!tag) throw new Error('RELEASE_TAG is required')
+          if (!releaseUrl) throw new Error('RELEASE_URL is required')
+          if (!payloadDir) throw new Error('PAYLOAD_DIR is required')
+          if (!Number.isFinite(chunkLimit) || chunkLimit < 500 || chunkLimit > 2000) {
+            throw new Error(`Invalid CHUNK_LIMIT: ${env.CHUNK_LIMIT}`)
+          }
+
+          let message = ''
+          if (isPrerelease || tag.startsWith('dev-')) {
+            message = [
+              `WindFlow dev/testing build 已发布 / Released`,
+              '',
+              '这是测试构建，不是生产发布。',
+              'This is a dev/testing build, not a production release.',
+              '',
+              `Name: ${releaseName}`,
+              `Tag: ${tag}`,
+              '',
+              `下载 / Download:`,
+              releaseUrl
+            ].join('\n')
+          } else {
+            const notes = pickBilingualReleaseNotes(env.CHANGELOG_PATH, tag)
+            message = [
+              `WindFlow Desktop ${tag} 已发布 / Released`,
+              '',
+              '中文更新摘要',
+              notes.zh,
+              '',
+              'English Summary',
+              notes.en,
+              '',
+              '下载 / Download:',
+              releaseUrl
+            ].join('\n')
+          }
+
+          fs.mkdirSync(payloadDir, { recursive: true })
+          const baseChunks = splitMessage(message, chunkLimit - 24)
+          const chunks =
+            baseChunks.length > 1
+              ? baseChunks.map((chunk, index) => `[${index + 1}/${baseChunks.length}]\n${chunk}`)
+              : baseChunks
+
+          chunks.forEach((content, index) => {
+            const filename = path.join(
+              payloadDir,
+              `payload-${String(index + 1).padStart(3, '0')}.json`
+            )
+            fs.writeFileSync(
+              filename,
+              `${JSON.stringify({ content, allowed_mentions: { parse: [] } })}\n`
+            )
+          })
+
+          console.log(`Prepared ${chunks.length} Discord payload(s) for ${tag}`)
+          NODE
+
+      - name: Send Discord notification
+        env:
+          DISCORD_RELEASE_WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
+          PAYLOAD_DIR: ${{ runner.temp }}/discord-release-payloads
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${DISCORD_RELEASE_WEBHOOK_URL:-}" ]; then
+            echo "::error::DISCORD_RELEASE_WEBHOOK_URL secret is required"
+            exit 1
+          fi
+
+          echo "::add-mask::${DISCORD_RELEASE_WEBHOOK_URL}"
+
+          shopt -s nullglob
+          payloads=("${PAYLOAD_DIR}"/payload-*.json)
+          if [ "${#payloads[@]}" -eq 0 ]; then
+            echo "::error::No Discord payload files were generated"
+            exit 1
+          fi
+
+          for payload in "${payloads[@]}"; do
+            echo "Sending Discord release notification: $(basename "${payload}")"
+            response_file="${RUNNER_TEMP}/discord-response-$(basename "${payload}").txt"
+            http_code="$(
+              curl -sS \
+                -o "${response_file}" \
+                -w '%{http_code}' \
+                -H 'Content-Type: application/json' \
+                --data @"${payload}" \
+                "${DISCORD_RELEASE_WEBHOOK_URL}"
+            )"
+
+            if [ "${http_code}" -lt 200 ] || [ "${http_code}" -ge 300 ]; then
+              echo "::error::Discord webhook returned HTTP ${http_code}"
+              cat "${response_file}" || true
+              exit 1
+            fi
+          done
