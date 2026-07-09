@@ -534,6 +534,7 @@ jobs:
     if: ${{ !cancelled() && needs.prepare.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
+      actions: write
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
@@ -603,4 +604,12 @@ jobs:
             --notes-file notes.md \
             --prerelease
           echo "Published prerelease ${TAG}:"
-          gh release view "${TAG}" --repo "${{ github.repository }}" --json url --jq '.url'
+          RELEASE_URL="$(gh release view "${TAG}" --repo "${{ github.repository }}" --json url --jq '.url')"
+          echo "${RELEASE_URL}"
+          gh workflow run notify-discord-release.yml \
+            --repo "${{ github.repository }}" \
+            --ref main \
+            -f release_tag="${TAG}" \
+            -f release_name="Dev ${VERSION} (${REF_NAME} @ ${SHORT_SHA})" \
+            -f release_url="${RELEASE_URL}" \
+            -f release_prerelease=true

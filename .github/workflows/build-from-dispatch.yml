@@ -5,6 +5,7 @@ on:
     types: [build-release]
 
 permissions:
+  actions: write
   contents: write
 
 env:
@@ -1090,6 +1091,15 @@ jobs:
             --repo ${{ github.repository }} \
             --title "WindFlow ${TAG_NAME}" \
             --notes-file release-notes.md
+
+          RELEASE_URL="$(gh release view "${TAG_NAME}" --repo ${{ github.repository }} --json url --jq '.url')"
+          gh workflow run notify-discord-release.yml \
+            --repo ${{ github.repository }} \
+            --ref main \
+            -f release_tag="${TAG_NAME}" \
+            -f release_name="WindFlow ${TAG_NAME}" \
+            -f release_url="${RELEASE_URL}" \
+            -f release_prerelease=false
 
       - name: Trigger landing page revalidation
         if: success()
