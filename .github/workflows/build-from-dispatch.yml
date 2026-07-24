@@ -8,6 +8,10 @@ permissions:
   actions: write
   contents: write
 
+concurrency:
+  group: stable-release-${{ github.event.client_payload.tag }}
+  cancel-in-progress: false
+
 env:
   NODE_VERSION: '22'
   NODE_OPTIONS: '--max-old-space-size=4096'
@@ -24,20 +28,24 @@ jobs:
     outputs:
       tag_name: ${{ steps.meta.outputs.tag_name }}
       semver: ${{ steps.meta.outputs.semver }}
+      source_sha: ${{ steps.meta.outputs.source_sha }}
       short_sha: ${{ steps.meta.outputs.short_sha }}
     steps:
       - name: Parse dispatch payload
         id: meta
+        env:
+          DISPATCH_TAG: ${{ github.event.client_payload.tag }}
+          DISPATCH_SHA: ${{ github.event.client_payload.sha }}
         run: |
           set -euxo pipefail
-          TAG="${{ github.event.client_payload.tag }}"
-          SHA="${{ github.event.client_payload.sha }}"
-          if [ -z "${TAG}" ]; then
-            echo "client_payload.tag is required" >&2
+          TAG="${DISPATCH_TAG}"
+          SHA="${DISPATCH_SHA}"
+          if [[ ! "${TAG}" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "client_payload.tag must use stable semantic version vX.Y.Z" >&2
             exit 1
           fi
-          if [ -z "${SHA}" ]; then
-            echo "client_payload.sha is required" >&2
+          if [[ ! "${SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "client_payload.sha must be a full lowercase commit SHA" >&2
             exit 1
           fi
           SHORT_SHA="${SHA:0:7}"
@@ -45,11 +53,113 @@ jobs:
 
           echo "tag_name=${TAG}" >> "$GITHUB_OUTPUT"
           echo "semver=${SEMVER}" >> "$GITHUB_OUTPUT"
+          echo "source_sha=${SHA}" >> "$GITHUB_OUTPUT"
           echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
 
           echo "Tag: ${TAG}"
           echo "Semver: ${SEMVER}"
           echo "Short SHA: ${SHORT_SHA}"
+
+      - name: Checkout private repository for validation
+        uses: actions/checkout@v6
+        with:
+          repository: windword-labs/windflow
+          token: ${{ secrets.PRIVATE_REPO_PAT }}
+          ref: ${{ steps.meta.outputs.source_sha }}
+          fetch-depth: 0
+          path: source
+
+      - name: Validate immutable source ref
+        env:
+          TAG_NAME: ${{ steps.meta.outputs.tag_name }}
+          SOURCE_SHA: ${{ steps.meta.outputs.source_sha }}
+        working-directory: source
+        run: |
+          set -euxo pipefail
+          git fetch origin \
+            "+refs/heads/main:refs/remotes/origin/main" \
+            "+refs/tags/${TAG_NAME}:refs/tags/${TAG_NAME}" \
+            --force
+
+          if [ "$(git cat-file -t "refs/tags/${TAG_NAME}")" != "commit" ]; then
+            echo "${TAG_NAME} must be a lightweight tag that points directly to a commit" >&2
+            exit 1
+          fi
+
+          TAG_SHA="$(git rev-parse "refs/tags/${TAG_NAME}")"
+          CHECKED_OUT_SHA="$(git rev-parse HEAD)"
+          if [ "${TAG_SHA}" != "${SOURCE_SHA}" ] || [ "${CHECKED_OUT_SHA}" != "${SOURCE_SHA}" ]; then
+            echo "tag, dispatch SHA, and checked-out commit must match" >&2
+            exit 1
+          fi
+
+          if ! git merge-base --is-ancestor "${SOURCE_SHA}" refs/remotes/origin/main; then
+            echo "${SOURCE_SHA} is not contained in windword-labs/windflow main" >&2
+            exit 1
+          fi
+
+      - name: Reject an existing stable release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ steps.meta.outputs.tag_name }}
+        run: |
+          set -euxo pipefail
+          RESPONSE_FILE="${RUNNER_TEMP}/existing-release.json"
+          HTTP_STATUS="$(
+            curl --silent --show-error \
+              --output "${RESPONSE_FILE}" \
+              --write-out '%{http_code}' \
+              --header "Authorization: Bearer ${GH_TOKEN}" \
+              --header 'Accept: application/vnd.github+json' \
+              --header 'X-GitHub-Api-Version: 2022-11-28' \
+              "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/releases/tags/${TAG_NAME}"
+          )"
+
+          case "${HTTP_STATUS}" in
+            404)
+              echo "No existing stable release for ${TAG_NAME}; retry is allowed."
+              ;;
+            200)
+              echo "Stable release ${TAG_NAME} already exists and is immutable." >&2
+              exit 1
+              ;;
+            *)
+              cat "${RESPONSE_FILE}" >&2
+              echo "Unable to verify existing release state (HTTP ${HTTP_STATUS})." >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install source dependencies
+        working-directory: source
+        run: pnpm install --frozen-lockfile --config.store-dir=${{ env.PNPM_STORE_PATH }}
+
+      - name: Verify stable release metadata
+        env:
+          SEMVER: ${{ steps.meta.outputs.semver }}
+          TAG_NAME: ${{ steps.meta.outputs.tag_name }}
+        working-directory: source
+        run: |
+          pnpm --filter windflow-desktop release:verify \
+            --version "${SEMVER}" \
+            --tag "${TAG_NAME}" \
+            --output-dir "${GITHUB_WORKSPACE}/release-metadata"
+
+      - name: Upload verified release metadata
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-metadata
+          path: release-metadata
 
   # ============================================
   # macOS ARM64 Build (Apple Silicon)
@@ -59,7 +169,6 @@ jobs:
     runs-on: macos-latest
     env:
       SHORT_SHA: ${{ needs.prepare.outputs.short_sha }}
-      OVERRIDE_VERSION: ${{ needs.prepare.outputs.semver }}
       TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
       CSC_FOR_PULL_REQUEST: 'true'
       CSC_LINK_BASE64: ${{ secrets.CSC_LINK_BASE64 }}
@@ -73,7 +182,7 @@ jobs:
         with:
           repository: windword-labs/windflow
           token: ${{ secrets.PRIVATE_REPO_PAT }}
-          ref: ${{ github.event.client_payload.sha }}
+          ref: ${{ needs.prepare.outputs.source_sha }}
 
       - name: Configure code signing keychain
         shell: bash
@@ -123,21 +232,6 @@ jobs:
       - name: Install setuptools for node-gyp
         shell: bash
         run: pip3 install setuptools --break-system-packages
-
-      - name: Override package version
-        shell: bash
-        run: |
-          set -euxo pipefail
-          node <<'NODE'
-          const fs = require('fs');
-          const path = require('path');
-          const version = process.env.OVERRIDE_VERSION;
-          if (!version) process.exit(0);
-          const pkgPath = path.join(process.cwd(), process.env.APP_DIR, 'package.json');
-          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-          pkg.version = version;
-          fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
-          NODE
 
       - name: Install dependencies
         shell: bash
@@ -272,7 +366,6 @@ jobs:
     runs-on: macos-14
     env:
       SHORT_SHA: ${{ needs.prepare.outputs.short_sha }}
-      OVERRIDE_VERSION: ${{ needs.prepare.outputs.semver }}
       TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
       CSC_FOR_PULL_REQUEST: 'true'
       CSC_LINK_BASE64: ${{ secrets.CSC_LINK_BASE64 }}
@@ -286,7 +379,7 @@ jobs:
         with:
           repository: windword-labs/windflow
           token: ${{ secrets.PRIVATE_REPO_PAT }}
-          ref: ${{ github.event.client_payload.sha }}
+          ref: ${{ needs.prepare.outputs.source_sha }}
 
       - name: Configure code signing keychain
         shell: bash
@@ -336,21 +429,6 @@ jobs:
       - name: Install setuptools for node-gyp
         shell: bash
         run: pip3 install setuptools --break-system-packages
-
-      - name: Override package version
-        shell: bash
-        run: |
-          set -euxo pipefail
-          node <<'NODE'
-          const fs = require('fs');
-          const path = require('path');
-          const version = process.env.OVERRIDE_VERSION;
-          if (!version) process.exit(0);
-          const pkgPath = path.join(process.cwd(), process.env.APP_DIR, 'package.json');
-          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-          pkg.version = version;
-          fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
-          NODE
 
       - name: Install dependencies
         shell: bash
@@ -485,7 +563,6 @@ jobs:
     runs-on: macos-latest
     env:
       SHORT_SHA: ${{ needs.prepare.outputs.short_sha }}
-      OVERRIDE_VERSION: ${{ needs.prepare.outputs.semver }}
       TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
       CSC_FOR_PULL_REQUEST: 'true'
       CSC_LINK_BASE64: ${{ secrets.CSC_LINK_BASE64 }}
@@ -503,7 +580,7 @@ jobs:
         with:
           repository: windword-labs/windflow
           token: ${{ secrets.PRIVATE_REPO_PAT }}
-          ref: ${{ github.event.client_payload.sha }}
+          ref: ${{ needs.prepare.outputs.source_sha }}
 
       - name: Configure code signing keychain
         shell: bash
@@ -553,21 +630,6 @@ jobs:
       - name: Install setuptools for node-gyp
         shell: bash
         run: pip3 install setuptools --break-system-packages
-
-      - name: Override package version
-        shell: bash
-        run: |
-          set -euxo pipefail
-          node <<'NODE'
-          const fs = require('fs');
-          const path = require('path');
-          const version = process.env.OVERRIDE_VERSION;
-          if (!version) process.exit(0);
-          const pkgPath = path.join(process.cwd(), process.env.APP_DIR, 'package.json');
-          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-          pkg.version = version;
-          fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
-          NODE
 
       - name: Install dependencies
         shell: bash
@@ -696,7 +758,6 @@ jobs:
     runs-on: windows-latest
     env:
       SHORT_SHA: ${{ needs.prepare.outputs.short_sha }}
-      OVERRIDE_VERSION: ${{ needs.prepare.outputs.semver }}
       TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
     steps:
       - name: Checkout private repository
@@ -704,7 +765,7 @@ jobs:
         with:
           repository: windword-labs/windflow
           token: ${{ secrets.PRIVATE_REPO_PAT }}
-          ref: ${{ github.event.client_payload.sha }}
+          ref: ${{ needs.prepare.outputs.source_sha }}
 
       - name: Install NSIS
         shell: pwsh
@@ -723,21 +784,6 @@ jobs:
       - name: Configure pnpm for shorter paths
         shell: bash
         run: pnpm config set virtual-store-dir-max-length 70
-
-      - name: Override package version
-        shell: bash
-        run: |
-          set -euxo pipefail
-          node <<'NODE'
-          const fs = require('fs');
-          const path = require('path');
-          const version = process.env.OVERRIDE_VERSION;
-          if (!version) process.exit(0);
-          const pkgPath = path.join(process.cwd(), process.env.APP_DIR, 'package.json');
-          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-          pkg.version = version;
-          fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
-          NODE
 
       - name: Install dependencies
         shell: bash
@@ -817,7 +863,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SHORT_SHA: ${{ needs.prepare.outputs.short_sha }}
-      OVERRIDE_VERSION: ${{ needs.prepare.outputs.semver }}
       TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
     steps:
       - name: Checkout private repository
@@ -825,7 +870,7 @@ jobs:
         with:
           repository: windword-labs/windflow
           token: ${{ secrets.PRIVATE_REPO_PAT }}
-          ref: ${{ github.event.client_payload.sha }}
+          ref: ${{ needs.prepare.outputs.source_sha }}
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v5
@@ -836,21 +881,6 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: Override package version
-        shell: bash
-        run: |
-          set -euxo pipefail
-          node <<'NODE'
-          const fs = require('fs');
-          const path = require('path');
-          const version = process.env.OVERRIDE_VERSION;
-          if (!version) process.exit(0);
-          const pkgPath = path.join(process.cwd(), process.env.APP_DIR, 'package.json');
-          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-          pkg.version = version;
-          fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
-          NODE
 
       - name: Install dependencies
         shell: bash
@@ -934,30 +964,20 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
-      SEMVER: ${{ needs.prepare.outputs.semver }}
+      SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
     steps:
-      - name: Checkout private repository for release notes
-        uses: actions/checkout@v6
-        with:
-          repository: windword-labs/windflow
-          token: ${{ secrets.PRIVATE_REPO_PAT }}
-          ref: ${{ needs.prepare.outputs.tag_name }}
-          path: source
-
       - name: Download all artifacts
         uses: actions/download-artifact@v8
         with:
           path: artifacts
 
-      - name: Generate release metadata
+      - name: Use verified release metadata
         shell: bash
         run: |
           set -euxo pipefail
-          GENERATED_DIR="generated"
-          node source/apps/windflow-desktop/scripts/generate-release-metadata.mjs \
-            --version "${SEMVER}" \
-            --output-dir "${GENERATED_DIR}"
-          cp "${GENERATED_DIR}/changelog.yml" "artifacts/changelog.yml"
+          test -s artifacts/release-metadata/changelog.yml
+          test -s artifacts/release-metadata/release-notes.md
+          cp artifacts/release-metadata/changelog.yml artifacts/changelog.yml
 
       - name: Merge macOS yml files
         shell: bash
@@ -1048,13 +1068,15 @@ jobs:
         run: |
           set -euxo pipefail
           RELEASE_TIME="$(date -u '+%Y-%m-%d %H:%M:%SZ')"
-          cp generated/release-notes.md release-notes.md
+          cp artifacts/release-metadata/release-notes.md release-notes.md
 
           cat >> release-notes.md << EOF
 
           ---
 
           Released at: ${RELEASE_TIME}
+          Source commit: https://github.com/windword-labs/windflow/commit/${SOURCE_SHA}
+          Build run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} (attempt ${GITHUB_RUN_ATTEMPT})
 
           ### Downloads
 
@@ -1081,12 +1103,11 @@ jobs:
             assets+=("$asset")
           done < "${ASSETS_FILE}"
 
-          # Delete existing release if exists
           if gh release view "${TAG_NAME}" --repo ${{ github.repository }} >/dev/null 2>&1; then
-            gh release delete "${TAG_NAME}" --repo ${{ github.repository }} -y || true
+            echo "Stable release ${TAG_NAME} already exists and is immutable." >&2
+            exit 1
           fi
 
-          # Create new release
           gh release create "${TAG_NAME}" "${assets[@]}" \
             --repo ${{ github.repository }} \
             --title "WindFlow ${TAG_NAME}" \
