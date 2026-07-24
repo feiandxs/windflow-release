@@ -1,0 +1,660 @@
+name: Build Desktop Dev Release
+
+run-name: Desktop dev ${{ github.event.client_payload.sha || inputs.sha || 'develop HEAD' }}
+
+on:
+  repository_dispatch:
+    types: [build-dev-release]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Full windflow develop SHA; leave empty to use current develop HEAD
+        required: false
+        type: string
+      macos_arm64:
+        description: macOS Apple Silicon
+        required: false
+        default: false
+        type: boolean
+      macos_x64:
+        description: macOS Intel
+        required: false
+        default: false
+        type: boolean
+      macos_universal:
+        description: macOS Universal
+        required: false
+        default: false
+        type: boolean
+      windows_x64:
+        description: Windows x64
+        required: false
+        default: false
+        type: boolean
+      linux_x64:
+        description: Linux x64
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  actions: write
+  contents: write
+
+env:
+  NODE_VERSION: '22'
+  NODE_OPTIONS: '--max-old-space-size=4096'
+  PNPM_STORE_PATH: ~/.pnpm-store
+  APP_DIR: apps/windflow-desktop
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      commit_title: ${{ steps.source.outputs.commit_title }}
+      matrix: ${{ steps.source.outputs.matrix }}
+      package_version: ${{ steps.source.outputs.package_version }}
+      platforms: ${{ steps.source.outputs.platforms }}
+      short_sha: ${{ steps.source.outputs.short_sha }}
+      source_run_attempt: ${{ steps.source.outputs.source_run_attempt }}
+      source_run_id: ${{ steps.source.outputs.source_run_id }}
+      source_run_url: ${{ steps.source.outputs.source_run_url }}
+      source_sha: ${{ steps.source.outputs.source_sha }}
+      tag_name: ${{ steps.source.outputs.tag_name }}
+    steps:
+      - name: Checkout release repository
+        uses: actions/checkout@v6
+
+      - name: Resolve request
+        id: request
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_SHA: ${{ github.event.client_payload.sha }}
+          DISPATCH_PLATFORMS: ${{ toJSON(github.event.client_payload.platforms) }}
+          MANUAL_SHA: ${{ inputs.sha }}
+          MANUAL_MACOS_ARM64: ${{ inputs.macos_arm64 }}
+          MANUAL_MACOS_X64: ${{ inputs.macos_x64 }}
+          MANUAL_MACOS_UNIVERSAL: ${{ inputs.macos_universal }}
+          MANUAL_WINDOWS_X64: ${{ inputs.windows_x64 }}
+          MANUAL_LINUX_X64: ${{ inputs.linux_x64 }}
+          PUBLIC_WORKFLOW_REF: ${{ github.ref }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync } from 'node:fs'
+          import { normalizePlatforms } from './scripts/dev-release.mjs'
+
+          const isDispatch = process.env.EVENT_NAME === 'repository_dispatch'
+          if (!isDispatch && process.env.PUBLIC_WORKFLOW_REF !== 'refs/heads/main') {
+            throw new Error('the public manual fallback must run from windflow-release main')
+          }
+          const requestedSha = (isDispatch ? process.env.DISPATCH_SHA : process.env.MANUAL_SHA)?.trim()
+          if (requestedSha && !/^[0-9a-f]{40}$/.test(requestedSha)) {
+            throw new Error('manual or dispatched sha must be a full lowercase commit SHA')
+          }
+
+          const platforms = isDispatch
+            ? normalizePlatforms(JSON.parse(process.env.DISPATCH_PLATFORMS || 'null'))
+            : normalizePlatforms(
+                [
+                  ['macos-arm64', process.env.MANUAL_MACOS_ARM64],
+                  ['macos-x64', process.env.MANUAL_MACOS_X64],
+                  ['macos-universal', process.env.MANUAL_MACOS_UNIVERSAL],
+                  ['windows-x64', process.env.MANUAL_WINDOWS_X64],
+                  ['linux-x64', process.env.MANUAL_LINUX_X64],
+                ]
+                  .filter(([, selected]) => selected === 'true')
+                  .map(([platform]) => platform),
+              )
+
+          appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            `requested_ref=${requestedSha || 'develop'}\nplatforms=${JSON.stringify(platforms)}\n`,
+          )
+          NODE
+
+      - name: Checkout source repository
+        uses: actions/checkout@v6
+        with:
+          repository: windword-labs/windflow
+          token: ${{ secrets.PRIVATE_REPO_PAT }}
+          ref: ${{ steps.request.outputs.requested_ref }}
+          fetch-depth: 0
+          path: source
+
+      - name: Validate source and prepare build
+        id: source
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REQUESTED_PLATFORMS: ${{ steps.request.outputs.platforms }}
+          DISPATCH_SOURCE_RUN_ID: ${{ github.event.client_payload.source_run_id }}
+          DISPATCH_SOURCE_RUN_ATTEMPT: ${{ github.event.client_payload.source_run_attempt }}
+        run: |
+          set -euo pipefail
+          git -C source fetch origin \
+            '+refs/heads/develop:refs/remotes/origin/develop' \
+            --force
+
+          SOURCE_SHA="$(git -C source rev-parse HEAD)"
+          if ! git -C source merge-base --is-ancestor "${SOURCE_SHA}" refs/remotes/origin/develop; then
+            echo "${SOURCE_SHA} is not contained in windword-labs/windflow develop." >&2
+            exit 1
+          fi
+
+          BASE_VERSION="$(
+            node -p "require('./source/apps/windflow-desktop/package.json').version"
+          )"
+          PREPARED="$(
+            node scripts/dev-release.mjs prepare \
+              --sha "${SOURCE_SHA}" \
+              --platforms "${REQUESTED_PLATFORMS}" \
+              --base-version "${BASE_VERSION}" \
+              --run-id "${GITHUB_RUN_ID}" \
+              --attempt "${GITHUB_RUN_ATTEMPT}"
+          )"
+
+          TAG_NAME="$(jq -r '.tag' <<<"${PREPARED}")"
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG_NAME}" >/dev/null 2>&1; then
+            echo "Technical dev tag ${TAG_NAME} already exists." >&2
+            exit 1
+          fi
+          if gh release view "${TAG_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "Dev prerelease ${TAG_NAME} already exists." >&2
+            exit 1
+          fi
+
+          SOURCE_RUN_ID="${DISPATCH_SOURCE_RUN_ID:-manual-fallback}"
+          SOURCE_RUN_ATTEMPT="${DISPATCH_SOURCE_RUN_ATTEMPT:-1}"
+          if [ "${SOURCE_RUN_ID}" = "manual-fallback" ]; then
+            SOURCE_RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          else
+            SOURCE_RUN_URL="${GITHUB_SERVER_URL}/windword-labs/windflow/actions/runs/${SOURCE_RUN_ID}"
+          fi
+
+          {
+            echo "source_sha=${SOURCE_SHA}"
+            echo "short_sha=$(jq -r '.shortSha' <<<"${PREPARED}")"
+            echo "platforms=$(jq -c '.selectedPlatforms' <<<"${PREPARED}")"
+            echo "matrix=$(jq -c '.matrix' <<<"${PREPARED}")"
+            echo "tag_name=${TAG_NAME}"
+            echo "package_version=$(jq -r '.version' <<<"${PREPARED}")"
+            echo "commit_title=$(git -C source log -1 --format=%s "${SOURCE_SHA}")"
+            echo "source_run_id=${SOURCE_RUN_ID}"
+            echo "source_run_attempt=${SOURCE_RUN_ATTEMPT}"
+            echo "source_run_url=${SOURCE_RUN_URL}"
+          } >> "${GITHUB_OUTPUT}"
+
+  diagnostics:
+    needs: prepare
+    runs-on: ubuntu-latest
+    outputs:
+      lint: ${{ steps.lint.outcome }}
+      test: ${{ steps.test.outcome }}
+      typecheck: ${{ steps.typecheck.outcome }}
+    steps:
+      - name: Checkout frozen source SHA
+        uses: actions/checkout@v6
+        with:
+          repository: windword-labs/windflow
+          token: ${{ secrets.PRIVATE_REPO_PAT }}
+          ref: ${{ needs.prepare.outputs.source_sha }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --config.store-dir=${{ env.PNPM_STORE_PATH }}
+
+      - name: Lint diagnostic
+        id: lint
+        continue-on-error: true
+        run: pnpm lint:desktop
+
+      - name: Typecheck diagnostic
+        id: typecheck
+        continue-on-error: true
+        run: pnpm typecheck:desktop
+
+      - name: Unit-test diagnostic
+        id: test
+        continue-on-error: true
+        run: pnpm test:desktop -- --run
+
+      - name: Report diagnostic outcomes
+        env:
+          LINT_OUTCOME: ${{ steps.lint.outcome }}
+          TYPECHECK_OUTCOME: ${{ steps.typecheck.outcome }}
+          TEST_OUTCOME: ${{ steps.test.outcome }}
+        run: |
+          echo "lint=${LINT_OUTCOME}"
+          echo "typecheck=${TYPECHECK_OUTCOME}"
+          echo "test=${TEST_OUTCOME}"
+
+  build:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    runs-on: ${{ matrix.os }}
+    env:
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      CSC_FOR_PULL_REQUEST: 'true'
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+      CSC_LINK_BASE64: ${{ secrets.CSC_LINK_BASE64 }}
+      TARGET_ID: ${{ matrix.id }}
+      WINDFLOW_RELEASE_REF: develop
+      WINDFLOW_RELEASE_SHA: ${{ needs.prepare.outputs.source_sha }}
+      WINDFLOW_RELEASE_VERSION: ${{ needs.prepare.outputs.package_version }}
+    steps:
+      - name: Checkout frozen source SHA
+        uses: actions/checkout@v6
+        with:
+          repository: windword-labs/windflow
+          token: ${{ secrets.PRIVATE_REPO_PAT }}
+          ref: ${{ needs.prepare.outputs.source_sha }}
+
+      - name: Configure macOS code signing keychain
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for variable in CSC_LINK_BASE64 CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!variable:-}" ]; then
+              echo "${variable} is required for the selected macOS dev build." >&2
+              exit 1
+            fi
+          done
+
+          CERT_PATH="${RUNNER_TEMP}/windflow-developer-id.p12"
+          KEYCHAIN_NAME="windflow-dev-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          echo "::add-mask::${KEYCHAIN_PASSWORD}"
+          echo "${CSC_LINK_BASE64}" | base64 --decode > "${CERT_PATH}"
+          security delete-keychain "${KEYCHAIN_NAME}" 2>/dev/null || true
+          security create-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_NAME}"
+          security set-keychain-settings "${KEYCHAIN_NAME}"
+          security unlock-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_NAME}"
+          security import "${CERT_PATH}" \
+            -k "${KEYCHAIN_NAME}" \
+            -P "${CSC_KEY_PASSWORD}" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/productsign
+          existing_keychains="$(security list-keychains -d user | sed 's/"//g')"
+          security list-keychains -d user -s "${KEYCHAIN_NAME}" ${existing_keychains}
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -s \
+            -k "${KEYCHAIN_PASSWORD}" \
+            "${KEYCHAIN_NAME}"
+          echo "CSC_LINK=${CERT_PATH}" >> "${GITHUB_ENV}"
+          echo "KEYCHAIN_NAME=${KEYCHAIN_NAME}" >> "${GITHUB_ENV}"
+
+      - name: Install Windows packaging tools
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: choco install nsis -y
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install setuptools for node-gyp
+        if: runner.os == 'macOS'
+        run: pip3 install setuptools --break-system-packages
+
+      - name: Configure pnpm for shorter Windows paths
+        if: runner.os == 'Windows'
+        shell: bash
+        run: pnpm config set virtual-store-dir-max-length 70
+
+      - name: Install dependencies
+        shell: bash
+        run: pnpm install --frozen-lockfile --config.store-dir=${{ env.PNPM_STORE_PATH }}
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@1.88
+
+      - name: Build selected dev package
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${TARGET_ID}" in
+            macos-arm64)
+              pnpm --filter windflow-desktop build:dev-release -- --mac --arm64
+              ;;
+            macos-x64)
+              pnpm --filter windflow-desktop build:dev-release -- --mac --x64
+              ;;
+            macos-universal)
+              pnpm --filter windflow-desktop build:dev-release -- --mac --universal
+              ;;
+            windows-x64)
+              pnpm --filter windflow-desktop build:dev-release -- --win nsis msi --x64
+              ;;
+            linux-x64)
+              pnpm --filter windflow-desktop build:dev-release -- --linux --x64
+              ;;
+            *)
+              echo "Unsupported matrix target: ${TARGET_ID}" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Stage dev artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          find "${APP_DIR}/dist" -maxdepth 1 -type f \( \
+            -name '*.zip' -o \
+            -name '*.dmg' -o \
+            -name '*.exe' -o \
+            -name '*.msi' -o \
+            -name '*.AppImage' -o \
+            -name '*.blockmap' \
+          \) -exec cp {} release/ \;
+
+          if ! find release -maxdepth 1 -type f \( \
+            -name '*.zip' -o \
+            -name '*.dmg' -o \
+            -name '*.exe' -o \
+            -name '*.msi' -o \
+            -name '*.AppImage' \
+          \) -print -quit | grep -q .; then
+            echo "No installable artifact was produced for ${TARGET_ID}." >&2
+            exit 1
+          fi
+          find release -maxdepth 1 -type f -print
+
+      - name: Validate macOS notarization
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARCHIVE="$(
+            find "${APP_DIR}/dist" -maxdepth 1 -type f \( -name '*.zip' -o -name '*.dmg' \) \
+              ! -name '*.blockmap' \
+              -print \
+              -quit
+          )"
+          if [ -z "${ARCHIVE}" ]; then
+            echo "No macOS archive found for notarization validation." >&2
+            exit 1
+          fi
+
+          EXTRACT_DIR="$(mktemp -d)"
+          if [[ "${ARCHIVE}" == *.zip ]]; then
+            ditto -x -k "${ARCHIVE}" "${EXTRACT_DIR}"
+          else
+            mkdir -p "${EXTRACT_DIR}/mnt"
+            hdiutil attach "${ARCHIVE}" -mountpoint "${EXTRACT_DIR}/mnt" -nobrowse
+            cp -R "${EXTRACT_DIR}/mnt"/*.app "${EXTRACT_DIR}/"
+            hdiutil detach "${EXTRACT_DIR}/mnt"
+          fi
+          APP_PATH="$(find "${EXTRACT_DIR}" -maxdepth 2 -type d -name '*.app' -print -quit)"
+          if [ -z "${APP_PATH}" ]; then
+            echo "Unable to locate the packaged macOS app." >&2
+            exit 1
+          fi
+          xcrun stapler validate "${APP_PATH}"
+          spctl --assess --type exec -vv "${APP_PATH}"
+
+      - name: Upload selected platform artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: dev-${{ matrix.id }}
+          path: release
+
+      - name: Clean up macOS signing keychain
+        if: always() && runner.os == 'macOS'
+        shell: bash
+        run: |
+          if [ -n "${KEYCHAIN_NAME:-}" ]; then
+            security delete-keychain "${KEYCHAIN_NAME}" || true
+          fi
+
+  create-release:
+    needs:
+      - prepare
+      - diagnostics
+      - build
+    if: always() && needs.prepare.result == 'success'
+    runs-on: ubuntu-latest
+    env:
+      COMMIT_TITLE: ${{ needs.prepare.outputs.commit_title }}
+      PACKAGE_VERSION: ${{ needs.prepare.outputs.package_version }}
+      SELECTED_PLATFORMS: ${{ needs.prepare.outputs.platforms }}
+      SOURCE_RUN_ATTEMPT: ${{ needs.prepare.outputs.source_run_attempt }}
+      SOURCE_RUN_ID: ${{ needs.prepare.outputs.source_run_id }}
+      SOURCE_RUN_URL: ${{ needs.prepare.outputs.source_run_url }}
+      SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
+      TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
+    steps:
+      - name: Checkout release repository
+        uses: actions/checkout@v6
+
+      - name: Download successful platform artifacts
+        uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          pattern: dev-*
+          path: artifacts
+
+      - name: Resolve platform results
+        id: results
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync, existsSync, readdirSync } from 'node:fs'
+
+          const selected = JSON.parse(process.env.SELECTED_PLATFORMS)
+          const successful = selected.filter((platform) => {
+            const directory = `artifacts/dev-${platform}`
+            return existsSync(directory) && readdirSync(directory).length > 0
+          })
+          const failed = selected.filter((platform) => !successful.includes(platform))
+          if (successful.length === 0) {
+            throw new Error(`all selected platform builds failed: ${failed.join(', ')}`)
+          }
+
+          appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            [
+              `successful=${JSON.stringify(successful)}`,
+              `failed=${JSON.stringify(failed)}`,
+              `complete=${failed.length === 0}`,
+              '',
+            ].join('\n'),
+          )
+          NODE
+
+      - name: Prepare release notes and assets
+        id: release
+        env:
+          DIAGNOSTIC_LINT: ${{ needs.diagnostics.outputs.lint }}
+          DIAGNOSTIC_TEST: ${{ needs.diagnostics.outputs.test }}
+          DIAGNOSTIC_TYPECHECK: ${{ needs.diagnostics.outputs.typecheck }}
+          FAILED_PLATFORMS: ${{ steps.results.outputs.failed }}
+          SUCCESSFUL_PLATFORMS: ${{ steps.results.outputs.successful }}
+        run: |
+          set -euo pipefail
+          PUBLIC_RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          jq -n \
+            --arg packageVersion "${PACKAGE_VERSION}" \
+            --arg sourceSha "${SOURCE_SHA}" \
+            --arg commitTitle "${COMMIT_TITLE}" \
+            --argjson selectedPlatforms "${SELECTED_PLATFORMS}" \
+            --argjson successfulPlatforms "${SUCCESSFUL_PLATFORMS}" \
+            --argjson failedPlatforms "${FAILED_PLATFORMS}" \
+            --arg sourceRunId "${SOURCE_RUN_ID}" \
+            --arg sourceRunAttempt "${SOURCE_RUN_ATTEMPT}" \
+            --arg sourceRunUrl "${SOURCE_RUN_URL}" \
+            --arg publicRunId "${GITHUB_RUN_ID}" \
+            --arg publicRunAttempt "${GITHUB_RUN_ATTEMPT}" \
+            --arg publicRunUrl "${PUBLIC_RUN_URL}" \
+            '{
+              packageVersion: $packageVersion,
+              sourceSha: $sourceSha,
+              commitTitle: $commitTitle,
+              selectedPlatforms: $selectedPlatforms,
+              successfulPlatforms: $successfulPlatforms,
+              failedPlatforms: $failedPlatforms,
+              sourceRun: {
+                id: $sourceRunId,
+                attempt: $sourceRunAttempt,
+                url: $sourceRunUrl
+              },
+              publicRun: {
+                id: $publicRunId,
+                attempt: $publicRunAttempt,
+                url: $publicRunUrl
+              }
+            }' |
+            node scripts/dev-release.mjs notes > release-notes.md
+
+          cat >> release-notes.md << EOF
+
+          ## Diagnostics (non-blocking)
+
+          - Lint: ${DIAGNOSTIC_LINT}
+          - Typecheck: ${DIAGNOSTIC_TYPECHECK}
+          - Unit tests: ${DIAGNOSTIC_TEST}
+          EOF
+
+          find artifacts -mindepth 2 -type f -print | sort > release-assets.txt
+          if [ ! -s release-assets.txt ]; then
+            echo 'No successful dev release assets were found.' >&2
+            exit 1
+          fi
+          echo "assets_file=release-assets.txt" >> "${GITHUB_OUTPUT}"
+
+      - name: Create public dev prerelease
+        id: publish
+        env:
+          ASSETS_FILE: ${{ steps.release.outputs.assets_file }}
+          COMPLETE: ${{ steps.results.outputs.complete }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if gh release view "${TAG_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "Dev prerelease ${TAG_NAME} already exists." >&2
+            exit 1
+          fi
+
+          assets=()
+          while IFS= read -r asset; do
+            assets+=("${asset}")
+          done < "${ASSETS_FILE}"
+
+          TITLE="WindFlow Dev ${TAG_NAME}"
+          if [ "${COMPLETE}" != "true" ]; then
+            TITLE="${TITLE} (partial)"
+          fi
+
+          gh release create "${TAG_NAME}" "${assets[@]}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --target "${GITHUB_SHA}" \
+            --title "${TITLE}" \
+            --notes-file release-notes.md \
+            --prerelease
+
+          RELEASE_URL="$(
+            gh release view "${TAG_NAME}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --json url \
+              --jq '.url'
+          )"
+          echo "release_url=${RELEASE_URL}" >> "${GITHUB_OUTPUT}"
+
+      - name: Notify complete dev release
+        if: steps.results.outputs.complete == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_URL: ${{ steps.publish.outputs.release_url }}
+        run: |
+          gh workflow run notify-discord-release.yml \
+            --repo "${GITHUB_REPOSITORY}" \
+            --ref main \
+            -f release_tag="${TAG_NAME}" \
+            -f release_name="WindFlow Dev ${TAG_NAME}" \
+            -f release_url="${RELEASE_URL}" \
+            -f release_prerelease=true
+
+      - name: Retain latest 10 dev prereleases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          CANDIDATES="$(
+            gh api --paginate \
+              "repos/${GITHUB_REPOSITORY}/releases?per_page=100" |
+              jq -s 'add' |
+              node scripts/dev-release.mjs retention --keep 10
+          )"
+
+          while IFS= read -r candidate; do
+            RELEASE_ID="$(jq -r '.id' <<<"${candidate}")"
+            TAG="$(jq -r '.tagName' <<<"${candidate}")"
+            if [[ ! "${TAG}" =~ ^dev- ]]; then
+              echo "Retention candidate escaped dev tag namespace: ${TAG}" >&2
+              exit 1
+            fi
+
+            RELEASE="$(
+              gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}"
+            )"
+            if ! jq -e \
+              --arg tag "${TAG}" \
+              '.prerelease == true and .draft == false and .tag_name == $tag and (.tag_name | startswith("dev-"))' \
+              <<<"${RELEASE}" >/dev/null; then
+              echo "Retention guard rejected release ${RELEASE_ID} (${TAG})." >&2
+              exit 1
+            fi
+
+            gh api \
+              --method DELETE \
+              "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}"
+            gh api \
+              --method DELETE \
+              "repos/${GITHUB_REPOSITORY}/git/refs/tags/${TAG}"
+          done < <(jq -c '.[]' <<<"${CANDIDATES}")
+
+      - name: Mark partial publication as failed
+        if: steps.results.outputs.complete != 'true'
+        env:
+          FAILED_PLATFORMS: ${{ steps.results.outputs.failed }}
+        run: |
+          echo "Partial dev prerelease published; failed platforms: ${FAILED_PLATFORMS}" >&2
+          exit 1
+
+  cleanup:
+    needs: create-release
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clean up run artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" \
+            --jq '.artifacts[].id' |
+            while IFS= read -r artifact_id; do
+              gh api \
+                --method DELETE \
+                "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}"
+            done
