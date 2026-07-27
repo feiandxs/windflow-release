@@ -456,15 +456,24 @@ jobs:
 
       - name: Resolve platform results
         id: results
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          AVAILABLE_ARTIFACT_NAMES="$(
+            gh api \
+              "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100" \
+              --jq '[.artifacts[].name]'
+          )"
+          export AVAILABLE_ARTIFACT_NAMES
+
           node --input-type=module <<'NODE'
-          import { appendFileSync, existsSync, readdirSync } from 'node:fs'
+          import { appendFileSync } from 'node:fs'
 
           const selected = JSON.parse(process.env.SELECTED_PLATFORMS)
-          const successful = selected.filter((platform) => {
-            const directory = `artifacts/dev-${platform}`
-            return existsSync(directory) && readdirSync(directory).length > 0
-          })
+          const availableArtifacts = new Set(JSON.parse(process.env.AVAILABLE_ARTIFACT_NAMES))
+          const successful = selected.filter((platform) =>
+            availableArtifacts.has(`dev-${platform}`),
+          )
           const failed = selected.filter((platform) => !successful.includes(platform))
           if (successful.length === 0) {
             throw new Error(`all selected platform builds failed: ${failed.join(', ')}`)
@@ -534,7 +543,7 @@ jobs:
           - Unit tests: ${DIAGNOSTIC_TEST}
           EOF
 
-          find artifacts -mindepth 2 -type f -print | sort > release-assets.txt
+          find artifacts -type f -print | sort > release-assets.txt
           if [ ! -s release-assets.txt ]; then
             echo 'No successful dev release assets were found.' >&2
             exit 1
