@@ -607,11 +607,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          RELEASES_FILE="${RUNNER_TEMP}/dev-releases.json"
+          gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/releases?per_page=100" |
+            jq -s 'add' > "${RELEASES_FILE}"
+
           CANDIDATES="$(
-            gh api --paginate \
-              "repos/${GITHUB_REPOSITORY}/releases?per_page=100" |
-              jq -s 'add' |
-              node scripts/dev-release.mjs retention --keep 10
+            node scripts/dev-release.mjs retention --keep 10 < "${RELEASES_FILE}"
           )"
 
           while IFS= read -r candidate; do
