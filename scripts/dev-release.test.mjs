@@ -26,6 +26,20 @@ test('prepares a deterministic dynamic matrix, tag, and package version', () => 
   })
 })
 
+test('uses an Intel runner for macOS x64 dev builds', () => {
+  const prepared = prepareDevRelease({
+    sha: 'a'.repeat(40),
+    platforms: ['macos-x64'],
+    baseVersion: '0.3.11',
+    runId: '12345',
+    attempt: '1',
+  })
+
+  assert.deepEqual(prepared.matrix, {
+    include: [{ id: 'macos-x64', os: 'macos-15-intel' }],
+  })
+})
+
 test('rejects invalid, empty, duplicate, and unsupported platform selections', () => {
   assert.throws(() => normalizePlatforms(''), /at least one/)
   assert.throws(() => normalizePlatforms('linux-x64,linux-x64'), /duplicates/)

@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url'
 
 export const PLATFORM_CONFIG = {
   'macos-arm64': { os: 'macos-latest' },
-  'macos-x64': { os: 'macos-14' },
+  'macos-x64': { os: 'macos-15-intel' },
   'macos-universal': { os: 'macos-latest' },
   'windows-x64': { os: 'windows-latest' },
   'linux-x64': { os: 'ubuntu-latest' },
