@@ -34,6 +34,9 @@ env:
 jobs:
   notify:
     name: Notify Discord
+    # Dev/prerelease builds are internal testing artifacts, not user-facing
+    # releases — skip the Discord announcement for them entirely.
+    if: ${{ !(github.event.release.prerelease || inputs.release_prerelease) }}
     runs-on: ubuntu-latest
     steps:
       - name: Set up Node.js
