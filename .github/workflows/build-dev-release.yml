@@ -250,6 +250,8 @@ jobs:
       CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
       CSC_LINK_BASE64: ${{ secrets.CSC_LINK_BASE64 }}
       TARGET_ID: ${{ matrix.id }}
+      UPDATER_METADATA_ASSET: ${{ matrix.updaterMetadataAsset }}
+      UPDATER_METADATA_SOURCE: ${{ matrix.updaterMetadataSource }}
       WINDFLOW_RELEASE_REF: main
       WINDFLOW_RELEASE_SHA: ${{ needs.prepare.outputs.source_sha }}
       WINDFLOW_RELEASE_VERSION: ${{ needs.prepare.outputs.package_version }}
@@ -367,6 +369,14 @@ jobs:
             -name '*.AppImage' -o \
             -name '*.blockmap' \
           \) -exec cp {} release/ \;
+
+          if [ ! -s "${APP_DIR}/dist/${UPDATER_METADATA_SOURCE}" ]; then
+            echo "Updater metadata ${UPDATER_METADATA_SOURCE} was not produced for ${TARGET_ID}." >&2
+            exit 1
+          fi
+          cp \
+            "${APP_DIR}/dist/${UPDATER_METADATA_SOURCE}" \
+            "release/${UPDATER_METADATA_ASSET}"
 
           if ! find release -maxdepth 1 -type f \( \
             -name '*.zip' -o \
