@@ -3,11 +3,31 @@ import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 
 export const PLATFORM_CONFIG = {
-  'macos-arm64': { os: 'macos-latest' },
-  'macos-x64': { os: 'macos-15-intel' },
-  'macos-universal': { os: 'macos-latest' },
-  'windows-x64': { os: 'windows-latest' },
-  'linux-x64': { os: 'ubuntu-latest' },
+  'macos-arm64': {
+    os: 'macos-latest',
+    updaterMetadataSource: 'latest-mac.yml',
+    updaterMetadataAsset: 'dev-macos-arm64-mac.yml',
+  },
+  'macos-x64': {
+    os: 'macos-15-intel',
+    updaterMetadataSource: 'latest-mac.yml',
+    updaterMetadataAsset: 'dev-macos-x64-mac.yml',
+  },
+  'macos-universal': {
+    os: 'macos-latest',
+    updaterMetadataSource: 'latest-mac.yml',
+    updaterMetadataAsset: 'dev-macos-universal-mac.yml',
+  },
+  'windows-x64': {
+    os: 'windows-latest',
+    updaterMetadataSource: 'latest.yml',
+    updaterMetadataAsset: 'dev-windows-x64.yml',
+  },
+  'linux-x64': {
+    os: 'ubuntu-latest',
+    updaterMetadataSource: 'latest-linux.yml',
+    updaterMetadataAsset: 'dev-linux-x64-linux.yml',
+  },
 }
 
 const stableVersionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
@@ -58,7 +78,7 @@ export function prepareDevRelease({ sha, platforms, baseVersion, runId, attempt 
     shortSha,
     selectedPlatforms,
     matrix: {
-      include: selectedPlatforms.map((id) => ({ id, os: PLATFORM_CONFIG[id].os })),
+      include: selectedPlatforms.map((id) => ({ id, ...PLATFORM_CONFIG[id] })),
     },
     tag: `dev-main-${shortSha}.${runId}.${attempt}`,
     version: `${baseVersion}-dev.${runId}.${attempt}`,

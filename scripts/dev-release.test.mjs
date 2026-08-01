@@ -20,8 +20,18 @@ test('prepares a deterministic dynamic matrix, tag, and package version', () => 
   assert.equal(prepared.version, '0.3.11-dev.12345.2')
   assert.deepEqual(prepared.matrix, {
     include: [
-      { id: 'macos-arm64', os: 'macos-latest' },
-      { id: 'windows-x64', os: 'windows-latest' },
+      {
+        id: 'macos-arm64',
+        os: 'macos-latest',
+        updaterMetadataSource: 'latest-mac.yml',
+        updaterMetadataAsset: 'dev-macos-arm64-mac.yml',
+      },
+      {
+        id: 'windows-x64',
+        os: 'windows-latest',
+        updaterMetadataSource: 'latest.yml',
+        updaterMetadataAsset: 'dev-windows-x64.yml',
+      },
     ],
   })
 })
@@ -36,8 +46,40 @@ test('uses an Intel runner for macOS x64 dev builds', () => {
   })
 
   assert.deepEqual(prepared.matrix, {
-    include: [{ id: 'macos-x64', os: 'macos-15-intel' }],
+    include: [
+      {
+        id: 'macos-x64',
+        os: 'macos-15-intel',
+        updaterMetadataSource: 'latest-mac.yml',
+        updaterMetadataAsset: 'dev-macos-x64-mac.yml',
+      },
+    ],
   })
+})
+
+test('assigns unique updater metadata assets to universal macOS and Linux builds', () => {
+  const prepared = prepareDevRelease({
+    sha: 'a'.repeat(40),
+    platforms: ['macos-universal', 'linux-x64'],
+    baseVersion: '0.3.11',
+    runId: '12345',
+    attempt: '1',
+  })
+
+  assert.deepEqual(prepared.matrix.include, [
+    {
+      id: 'macos-universal',
+      os: 'macos-latest',
+      updaterMetadataSource: 'latest-mac.yml',
+      updaterMetadataAsset: 'dev-macos-universal-mac.yml',
+    },
+    {
+      id: 'linux-x64',
+      os: 'ubuntu-latest',
+      updaterMetadataSource: 'latest-linux.yml',
+      updaterMetadataAsset: 'dev-linux-x64-linux.yml',
+    },
+  ])
 })
 
 test('rejects invalid, empty, duplicate, and unsupported platform selections', () => {
