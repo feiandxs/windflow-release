@@ -1,6 +1,6 @@
 name: Build Desktop Dev Release
 
-run-name: Desktop dev ${{ github.event.client_payload.sha || inputs.sha || 'develop HEAD' }}
+run-name: Desktop dev ${{ github.event.client_payload.sha || inputs.sha || 'main HEAD' }}
 
 on:
   repository_dispatch:
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       sha:
-        description: Full windflow develop SHA; leave empty to use current develop HEAD
+        description: Full windflow main SHA; leave empty to use current main HEAD
         required: false
         type: string
       macos_arm64:
@@ -108,7 +108,7 @@ jobs:
 
           appendFileSync(
             process.env.GITHUB_OUTPUT,
-            `requested_ref=${requestedSha || 'develop'}\nplatforms=${JSON.stringify(platforms)}\n`,
+            `requested_ref=${requestedSha || 'main'}\nplatforms=${JSON.stringify(platforms)}\n`,
           )
           NODE
 
@@ -131,12 +131,12 @@ jobs:
         run: |
           set -euo pipefail
           git -C source fetch origin \
-            '+refs/heads/develop:refs/remotes/origin/develop' \
+            '+refs/heads/main:refs/remotes/origin/main' \
             --force
 
           SOURCE_SHA="$(git -C source rev-parse HEAD)"
-          if ! git -C source merge-base --is-ancestor "${SOURCE_SHA}" refs/remotes/origin/develop; then
-            echo "${SOURCE_SHA} is not contained in windword-labs/windflow develop." >&2
+          if ! git -C source merge-base --is-ancestor "${SOURCE_SHA}" refs/remotes/origin/main; then
+            echo "${SOURCE_SHA} is not contained in windword-labs/windflow main." >&2
             exit 1
           fi
 
@@ -250,7 +250,7 @@ jobs:
       CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
       CSC_LINK_BASE64: ${{ secrets.CSC_LINK_BASE64 }}
       TARGET_ID: ${{ matrix.id }}
-      WINDFLOW_RELEASE_REF: develop
+      WINDFLOW_RELEASE_REF: main
       WINDFLOW_RELEASE_SHA: ${{ needs.prepare.outputs.source_sha }}
       WINDFLOW_RELEASE_VERSION: ${{ needs.prepare.outputs.package_version }}
     steps:

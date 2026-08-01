@@ -60,7 +60,7 @@ export function prepareDevRelease({ sha, platforms, baseVersion, runId, attempt 
     matrix: {
       include: selectedPlatforms.map((id) => ({ id, os: PLATFORM_CONFIG[id].os })),
     },
-    tag: `dev-develop-${shortSha}.${runId}.${attempt}`,
+    tag: `dev-main-${shortSha}.${runId}.${attempt}`,
     version: `${baseVersion}-dev.${runId}.${attempt}`,
   }
 }

@@ -16,7 +16,7 @@ test('prepares a deterministic dynamic matrix, tag, and package version', () => 
     attempt: '2',
   })
 
-  assert.equal(prepared.tag, 'dev-develop-aaaaaaa.12345.2')
+  assert.equal(prepared.tag, 'dev-main-aaaaaaa.12345.2')
   assert.equal(prepared.version, '0.3.11-dev.12345.2')
   assert.deepEqual(prepared.matrix, {
     include: [

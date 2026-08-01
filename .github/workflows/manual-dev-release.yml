@@ -6,7 +6,7 @@ on:
       ref:
         description: 'windflow ref (branch, tag, or commit sha)'
         required: true
-        default: 'develop'
+        default: 'main'
         type: string
 
 permissions:
@@ -45,7 +45,7 @@ jobs:
           REF_NAME="${{ inputs.ref }}"
           REF_SLUG="$(printf '%s' "${REF_NAME}" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')"
           if [ -z "${REF_SLUG}" ]; then
-            REF_SLUG="develop"
+            REF_SLUG="main"
           fi
           BASE_VERSION="$(node -p "require('./apps/windflow-desktop/package.json').version")"
           VERSION="${BASE_VERSION}-dev.${{ github.run_number }}.${{ github.run_attempt }}"
